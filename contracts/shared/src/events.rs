@@ -43,3 +43,7 @@ pub fn protocol_paused(env: &Env, by: &Address) {
 pub fn protocol_unpaused(env: &Env, by: &Address) {
     emit(env, symbol_short!("UNPAUSED"), by.clone());
 }
+
+pub fn admin_transferred(env: &Env, new_admin: &Address) {
+    emit(env, symbol_short!("ADM_TRF"), new_admin.clone());
+}
