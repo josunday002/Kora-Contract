@@ -248,4 +248,188 @@ mod tests {
         let result = client.try_register_sme(&stranger, &sme, &10u32);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_add_verifier_non_admin() {
+        let (env, _admin, client) = setup();
+        let stranger = Address::generate(&env);
+        let verifier = Address::generate(&env);
+
+        let result = client.try_add_verifier(&stranger, &verifier);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_remove_verifier() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        assert!(client.is_verifier(&verifier));
+
+        client.remove_verifier(&admin, &verifier);
+        assert!(!client.is_verifier(&verifier));
+    }
+
+    #[test]
+    fn test_update_sme_score() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.register_sme(&verifier, &sme, &35u32);
+
+        client.update_sme_score(&verifier, &sme, &50u32);
+        let profile = client.get_sme_profile(&sme);
+        assert_eq!(profile.risk_score, 50);
+    }
+
+    #[test]
+    fn test_update_sme_score_non_verifier() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+        let stranger = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.register_sme(&verifier, &sme, &35u32);
+
+        let result = client.try_update_sme_score(&stranger, &sme, &50u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_increment_invoice_count() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+        let caller = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.register_sme(&verifier, &sme, &35u32);
+
+        let profile_before = client.get_sme_profile(&sme);
+        assert_eq!(profile_before.total_invoices, 0);
+
+        client.increment_invoice_count(&caller, &sme);
+        let profile_after = client.get_sme_profile(&sme);
+        assert_eq!(profile_after.total_invoices, 1);
+    }
+
+    #[test]
+    fn test_increment_invoice_count_unregistered_sme() {
+        let (env, _admin, client) = setup();
+        let caller = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        let result = client.try_increment_invoice_count(&caller, &sme);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_record_default() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.register_sme(&verifier, &sme, &35u32);
+
+        let profile_before = client.get_sme_profile(&sme);
+        assert_eq!(profile_before.defaults, 0);
+
+        client.record_default(&admin, &sme);
+        let profile_after = client.get_sme_profile(&sme);
+        assert_eq!(profile_after.defaults, 1);
+    }
+
+    #[test]
+    fn test_record_default_non_admin() {
+        let (env, _admin, client) = setup();
+        let stranger = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        let result = client.try_record_default(&stranger, &sme);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_record_default_unregistered_sme() {
+        let (env, admin, client) = setup();
+        let sme = Address::generate(&env);
+
+        let result = client.try_record_default(&admin, &sme);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_set_debtor_score() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let debtor_hash = soroban_sdk::Bytes::new(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.set_debtor_score(&verifier, &debtor_hash, &45u32);
+
+        let score = client.get_debtor_score(&debtor_hash);
+        assert_eq!(score, Some(45u32));
+    }
+
+    #[test]
+    fn test_set_debtor_score_non_verifier() {
+        let (env, _admin, client) = setup();
+        let stranger = Address::generate(&env);
+        let debtor_hash = soroban_sdk::Bytes::new(&env);
+
+        let result = client.try_set_debtor_score(&stranger, &debtor_hash, &45u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_risk_score() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+
+        let result = client.try_register_sme(&verifier, &sme, &101u32);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multiple_defaults() {
+        let (env, admin, client) = setup();
+        let verifier = Address::generate(&env);
+        let sme = Address::generate(&env);
+
+        client.add_verifier(&admin, &verifier);
+        client.register_sme(&verifier, &sme, &35u32);
+
+        client.record_default(&admin, &sme);
+        client.record_default(&admin, &sme);
+        client.record_default(&admin, &sme);
+
+        let profile = client.get_sme_profile(&sme);
+        assert_eq!(profile.defaults, 3);
+    }
+
+    #[test]
+    fn test_get_sme_profile_not_found() {
+        let (env, _admin, client) = setup();
+        let sme = Address::generate(&env);
+
+        let result = client.try_get_sme_profile(&sme);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_debtor_score_not_found() {
+        let (env, _admin, client) = setup();
+        let debtor_hash = soroban_sdk::Bytes::new(&env);
+
+        let score = client.get_debtor_score(&debtor_hash);
+        assert_eq!(score, None);
+    }
 }
