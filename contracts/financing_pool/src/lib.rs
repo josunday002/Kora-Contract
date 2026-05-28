@@ -1,21 +1,19 @@
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, Env, Map, Vec,
-};
 use kora_shared::{
     errors::KoraError,
     events,
     types::{Pool, Position},
     validation::bps_of,
 };
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Map, Vec};
 
 // ── Storage Keys ─────────────────────────────────────────────────────────────
 
 #[contracttype]
 pub enum DataKey {
     Pool(u64),
-    Positions(u64),   // Map<Address, Position>
+    Positions(u64), // Map<Address, Position>
     Admin,
     InvoiceNft,
     Treasury,
@@ -42,19 +40,19 @@ impl FinancingPoolContract {
         }
         kora_shared::validation::require_valid_fee_bps(late_penalty_bps)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::InvoiceNft, &invoice_nft);
+        env.storage()
+            .instance()
+            .set(&DataKey::InvoiceNft, &invoice_nft);
         env.storage().instance().set(&DataKey::Treasury, &treasury);
-        env.storage().instance().set(&DataKey::LatePenaltyBps, &late_penalty_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::LatePenaltyBps, &late_penalty_bps);
         Ok(())
     }
 
     /// Called by Marketplace when an invoice is fully funded.
     /// Creates the pool and releases net funds to the SME.
-    pub fn release_funds(
-        env: Env,
-        marketplace: Address,
-        invoice_id: u64,
-    ) -> Result<(), KoraError> {
+    pub fn release_funds(env: Env, marketplace: Address, invoice_id: u64) -> Result<(), KoraError> {
         marketplace.require_auth();
 
         if env.storage().persistent().has(&DataKey::Pool(invoice_id)) {
@@ -86,7 +84,9 @@ impl FinancingPoolContract {
                 .unwrap_or(200),
         };
 
-        env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(invoice_id), &pool);
 
         // Transition NFT status to Funded
         nft_client.set_funded(&env.current_contract_address(), &invoice_id);
@@ -134,7 +134,9 @@ impl FinancingPoolContract {
             .unwrap_or(Map::new(&env));
 
         positions.set(investor, position);
-        env.storage().persistent().set(&DataKey::Positions(invoice_id), &positions);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Positions(invoice_id), &positions);
         Ok(())
     }
 
@@ -187,7 +189,9 @@ impl FinancingPoolContract {
             let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(env, &nft_contract);
             nft_client.set_repaid(&env.current_contract_address(), &invoice_id);
         } else {
-            env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Pool(invoice_id), &pool);
         }
 
         Ok(())
@@ -212,9 +216,7 @@ impl FinancingPoolContract {
         for (investor, position) in positions.iter() {
             // Investor receives their share of total repaid
             let payout = bps_of(total_repaid, position.share_bps)?;
-            let yield_amount = payout
-                .checked_sub(position.contributed)
-                .unwrap_or(0);
+            let yield_amount = payout.checked_sub(position.contributed).unwrap_or(0);
 
             token_client.transfer(&env.current_contract_address(), &investor, &payout);
             events::yield_distributed(env, invoice_id, &investor, yield_amount);
@@ -251,7 +253,13 @@ impl FinancingPoolContract {
 
         // Distribute whatever was repaid so far (partial recovery)
         if pool.repaid_amount > 0 {
-            Self::distribute_yield(&env, invoice_id, &token, pool.repaid_amount, pool.face_value)?;
+            Self::distribute_yield(
+                &env,
+                invoice_id,
+                &token,
+                pool.repaid_amount,
+                pool.face_value,
+            )?;
         }
 
         // Mark NFT as defaulted
