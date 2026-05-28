@@ -38,7 +38,7 @@ pub fn require_non_empty_string(s: &String) -> Result<(), KoraError> {
 
 pub fn require_non_empty_bytes(b: &Bytes) -> Result<(), KoraError> {
     if b.len() == 0 {
-        return Err(KoraError::EmptyString);
+        return Err(KoraError::EmptyBytes);
     }
     Ok(())
 }
@@ -72,7 +72,20 @@ pub fn safe_add(a: i128, b: i128) -> Result<i128, KoraError> {
 
 /// Safe subtraction with underflow check
 pub fn safe_sub(a: i128, b: i128) -> Result<i128, KoraError> {
-    a.checked_sub(b).ok_or(KoraError::ArithmeticOverflow)
+    a.checked_sub(b).ok_or(KoraError::ArithmeticUnderflow)
+}
+
+/// Safe multiplication with overflow check
+pub fn safe_mul(a: i128, b: i128) -> Result<i128, KoraError> {
+    a.checked_mul(b).ok_or(KoraError::ArithmeticOverflow)
+}
+
+/// Safe division, returns error on divide-by-zero
+pub fn safe_div(a: i128, b: i128) -> Result<i128, KoraError> {
+    if b == 0 {
+        return Err(KoraError::InvalidAmount);
+    }
+    a.checked_div(b).ok_or(KoraError::ArithmeticOverflow)
 }
 
 #[cfg(test)]
@@ -111,5 +124,17 @@ mod tests {
     fn test_safe_sub() {
         assert_eq!(safe_sub(300, 100).unwrap(), 200);
         assert!(safe_sub(100, 200).is_err());
+    }
+
+    #[test]
+    fn test_safe_mul() {
+        assert_eq!(safe_mul(100, 200).unwrap(), 20_000);
+        assert!(safe_mul(i128::MAX, 2).is_err());
+    }
+
+    #[test]
+    fn test_safe_div() {
+        assert_eq!(safe_div(200, 4).unwrap(), 50);
+        assert!(safe_div(100, 0).is_err());
     }
 }
