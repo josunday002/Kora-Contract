@@ -50,4 +50,5 @@ pub enum KoraError {
     EmptyString = 92,
     AlreadyInitialized = 93,
     NotInitialized = 94,
+    Reentrant = 95,
 }
