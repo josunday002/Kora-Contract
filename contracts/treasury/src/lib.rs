@@ -123,7 +123,7 @@ impl TreasuryContract {
             .get(&DataKey::WithdrawalLock)
             .unwrap_or(false);
         if locked {
-            return Err(KoraError::Unauthorized); // Reentrancy detected
+            return Err(KoraError::ReentrancyDetected);
         }
         env.storage()
             .instance()
@@ -157,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_initialize_success() {
+    fn test_initialize_creates_contract() {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, TreasuryContract);
@@ -165,7 +165,7 @@ mod tests {
         let admin = Address::generate(&env);
         
         client.initialize(&admin, &50u32);
-        (env, admin, client)
+        assert_eq!(client.get_fee_bps(), 50);
     }
 
     #[test]
@@ -370,18 +370,16 @@ mod tests {
     #[test]
     fn test_get_balance_zero() {
         let (env, _admin, client) = setup();
-        // Use a generated address for the token (won't actually call it in this test)
         let token = Address::generate(&env);
 
         // This test verifies the function signature exists
         // In a real scenario, the token would be a valid contract
-        // For now, we skip the actual call since it requires a real token contract
-        let _ = token;
-        let _ = client;
+        let balance = client.get_balance(&token);
+        assert_eq!(balance, 0);
     }
 
     #[test]
-    fn test_withdraw_zero_amount_fails() {
+    fn test_withdraw_with_zero_amount_rejected() {
         let (env, admin, client) = setup();
         let token = Address::generate(&env);
         let recipient = Address::generate(&env);
@@ -391,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn test_withdraw_negative_amount_fails() {
+    fn test_withdraw_with_negative_amount_rejected() {
         let (env, admin, client) = setup();
         let token = Address::generate(&env);
         let recipient = Address::generate(&env);

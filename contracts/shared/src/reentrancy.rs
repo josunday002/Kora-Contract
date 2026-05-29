@@ -11,7 +11,7 @@ pub enum GuardKey {
 /// Acquire a reentrancy guard. Must be called at the start of protected functions.
 pub fn acquire_guard(env: &Env) -> Result<(), KoraError> {
     if env.storage().instance().has(&GuardKey::ReentrancyGuard) {
-        return Err(KoraError::Unauthorized);
+        return Err(KoraError::ReentrancyDetected);
     }
     env.storage().instance().set(&GuardKey::ReentrancyGuard, &true);
     Ok(())
@@ -62,5 +62,32 @@ mod tests {
             assert!(ReentrancyGuard::new(&env).is_err());
         }
         assert!(ReentrancyGuard::new(&env).is_ok());
+    }
+
+    #[test]
+    fn test_nested_guard_acquisition_fails() {
+        let env = Env::default();
+        assert!(acquire_guard(&env).is_ok());
+        let result = acquire_guard(&env);
+        assert!(result.is_err());
+        release_guard(&env);
+    }
+
+    #[test]
+    fn test_guard_release_allows_reacquisition() {
+        let env = Env::default();
+        assert!(acquire_guard(&env).is_ok());
+        release_guard(&env);
+        assert!(acquire_guard(&env).is_ok());
+        release_guard(&env);
+    }
+
+    #[test]
+    fn test_multiple_guard_cycles() {
+        let env = Env::default();
+        for _ in 0..5 {
+            assert!(acquire_guard(&env).is_ok());
+            release_guard(&env);
+        }
     }
 }

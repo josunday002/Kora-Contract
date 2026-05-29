@@ -72,7 +72,7 @@ pub fn safe_add(a: i128, b: i128) -> Result<i128, KoraError> {
 
 /// Safe subtraction with underflow check
 pub fn safe_sub(a: i128, b: i128) -> Result<i128, KoraError> {
-    a.checked_sub(b).ok_or(KoraError::ArithmeticOverflow)
+    a.checked_sub(b).ok_or(KoraError::InvalidAmount)
 }
 
 #[cfg(test)]
@@ -111,5 +111,44 @@ mod tests {
     fn test_safe_sub() {
         assert_eq!(safe_sub(300, 100).unwrap(), 200);
         assert!(safe_sub(100, 200).is_err());
+        assert!(safe_sub(i128::MIN, 1).is_err());
+    }
+
+    #[test]
+    fn test_safe_sub_boundary_conditions() {
+        assert_eq!(safe_sub(0, 0).unwrap(), 0);
+        assert_eq!(safe_sub(i128::MAX, 0).unwrap(), i128::MAX);
+        assert_eq!(safe_sub(i128::MAX, i128::MAX).unwrap(), 0);
+    }
+
+    #[test]
+    fn test_require_amount_within_bounds() {
+        assert!(require_amount_within_bounds(50, 100).is_ok());
+        assert!(require_amount_within_bounds(0, 100).is_ok());
+        assert!(require_amount_within_bounds(100, 100).is_ok());
+        assert!(require_amount_within_bounds(101, 100).is_err());
+        assert!(require_amount_within_bounds(-1, 100).is_err());
+    }
+
+    #[test]
+    fn test_require_valid_fee_bps() {
+        assert!(require_valid_fee_bps(0).is_ok());
+        assert!(require_valid_fee_bps(5000).is_ok());
+        assert!(require_valid_fee_bps(10_000).is_ok());
+        assert!(require_valid_fee_bps(10_001).is_err());
+    }
+
+    #[test]
+    fn test_bps_of_edge_cases() {
+        assert_eq!(bps_of(0, 5000).unwrap(), 0);
+        assert_eq!(bps_of(10_000, 0).unwrap(), 0);
+        assert_eq!(bps_of(10_000, 10_000).unwrap(), 10_000);
+    }
+
+    #[test]
+    fn test_safe_add_boundary() {
+        assert_eq!(safe_add(0, 0).unwrap(), 0);
+        assert_eq!(safe_add(i128::MAX - 1, 1).unwrap(), i128::MAX);
+        assert!(safe_add(i128::MAX, 1).is_err());
     }
 }
