@@ -96,6 +96,14 @@ pub fn admin_transferred(env: &Env, new_admin: &Address) {
     emit(env, symbol_short!("ADM_TRF"), new_admin.clone());
 }
 
+pub fn role_granted(env: &Env, admin: &Address, target: &Address) {
+    emit(env, symbol_short!("ROL_GRT"), (admin.clone(), target.clone()));
+}
+
+pub fn role_revoked(env: &Env, admin: &Address, target: &Address) {
+    emit(env, symbol_short!("ROL_RVK"), (admin.clone(), target.clone()));
+}
+
 // ── Risk Registry Events ──────────────────────────────────────────────────────
 
 pub fn verifier_added(env: &Env, admin: &Address, verifier: &Address) {

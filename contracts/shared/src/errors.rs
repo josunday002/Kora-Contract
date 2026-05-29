@@ -9,6 +9,9 @@ pub enum KoraError {
     NotAdmin = 2,
     NotVerifier = 3,
     ProtocolPaused = 4,
+    AlreadyPaused = 5,
+    NotPaused = 6,
+    RoleNotAssigned = 7,
 
     // Invoice
     InvoiceNotFound = 10,
