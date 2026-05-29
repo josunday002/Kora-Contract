@@ -169,24 +169,24 @@ impl FinancingPoolContract {
             return Err(KoraError::InvalidAmount);
         }
 
-        let token_client = token::Client::new(env, token);
-        token_client.transfer(payer, &env.current_contract_address(), &amount);
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&payer, &env.current_contract_address(), &amount);
 
         pool.repaid_amount = pool
             .repaid_amount
             .checked_add(amount)
             .ok_or(KoraError::ArithmeticOverflow)?;
 
-        events::repayment_made(env, invoice_id, payer, amount);
+        events::repayment_made(&env, invoice_id, &payer, amount);
 
         if pool.repaid_amount >= pool.face_value {
             pool.is_closed = true;
             env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
-            Self::distribute_yield(env, invoice_id, token, pool.repaid_amount, pool.face_value)?;
+            Self::distribute_yield(&env, invoice_id, &token, pool.repaid_amount, pool.face_value)?;
 
             // Mark NFT as repaid
             let nft_contract: Address = env.storage().instance().get(&DataKey::InvoiceNft).unwrap();
-            let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(env, &nft_contract);
+            let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(&env, &nft_contract);
             nft_client.set_repaid(&env.current_contract_address(), &invoice_id);
         } else {
             env.storage()
@@ -211,7 +211,7 @@ impl FinancingPoolContract {
             .get(&DataKey::Positions(invoice_id))
             .unwrap_or(Map::new(env));
 
-        let token_client = token::Client::new(env, token);
+        let token_client = token::Client::new(&env, &token);
 
         for (investor, position) in positions.iter() {
             // Investor receives their share of total repaid
@@ -327,8 +327,8 @@ mod tests {
     #[test]
     fn test_initialize_success() {
         let (env, admin, nft, treasury, client) = setup();
-        let pool = client.get_pool(&1u64);
-        assert!(pool.is_err());
+        let result = client.try_get_pool(&1u64);
+        assert!(result.is_err());
     }
 
     #[test]

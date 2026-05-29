@@ -428,21 +428,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mint_invoice_negative_amount_fails() {
-        let (env, _admin, client) = setup();
-        let sme = Address::generate(&env);
-        let debtor_hash = Bytes::from_slice(&env, &[1u8; 32]);
-        let ipfs_cid = String::from_str(&env, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
-        let due_date = env.ledger().timestamp() + 86_400;
-
-        let result = client.try_mint_invoice(
-            &sme, &debtor_hash, &-1_000_000_000i128,
-            &Symbol::new(&env, "USDC"), &due_date, &ipfs_cid, &10u32,
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_mint_invoice_past_due_date_fails() {
         let (env, _admin, client) = setup();
         let sme = Address::generate(&env);

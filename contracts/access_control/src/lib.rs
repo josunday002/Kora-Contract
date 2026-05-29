@@ -533,7 +533,7 @@ mod tests {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
-mod tests {
+mod tests_extended {
     use super::*;
     use kora_shared::errors::KoraError;
     use soroban_sdk::{
@@ -736,7 +736,7 @@ mod tests {
             invoke: &soroban_sdk::testutils::MockAuthInvoke {
                 contract: &client.address,
                 fn_name: "grant_role",
-                args: (&admin, &target, &Role::Verifier).into_val(&env),
+                args: (&admin, &target, Role::Verifier).into_val(&env),
                 sub_invokes: &[],
             },
         }]);
