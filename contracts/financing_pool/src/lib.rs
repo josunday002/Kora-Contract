@@ -181,7 +181,9 @@ impl FinancingPoolContract {
 
         if pool.repaid_amount >= pool.face_value {
             pool.is_closed = true;
-            env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Pool(invoice_id), &pool);
             Self::distribute_yield(env, invoice_id, token, pool.repaid_amount, pool.face_value)?;
 
             // Mark NFT as repaid
@@ -237,7 +239,11 @@ impl FinancingPoolContract {
         Self::require_admin(&env, &admin)?;
 
         // Check reentrancy guard
-        if env.storage().persistent().has(&DataKey::RepaymentLock(invoice_id)) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::RepaymentLock(invoice_id))
+        {
             return Err(KoraError::ProtocolPaused);
         }
 
@@ -311,7 +317,13 @@ mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};
 
-    fn setup() -> (Env, Address, Address, Address, FinancingPoolContractClient<'static>) {
+    fn setup() -> (
+        Env,
+        Address,
+        Address,
+        Address,
+        FinancingPoolContractClient<'static>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, FinancingPoolContract);
@@ -348,7 +360,7 @@ mod tests {
         let admin = Address::generate(&env);
         let nft = Address::generate(&env);
         let treasury = Address::generate(&env);
-        
+
         let result = client.try_initialize(&admin, &nft, &treasury, &10_001u32);
         assert!(result.is_err());
     }
@@ -373,7 +385,13 @@ mod tests {
         let investor = Address::generate(&env);
         let non_admin = Address::generate(&env);
 
-        let result = client.try_record_position(&non_admin, &1u64, &investor, &1_000_000_000i128, &10_000_000_000i128);
+        let result = client.try_record_position(
+            &non_admin,
+            &1u64,
+            &investor,
+            &1_000_000_000i128,
+            &10_000_000_000i128,
+        );
         assert!(result.is_err());
     }
 

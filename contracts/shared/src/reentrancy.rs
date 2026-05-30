@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Env};
 use crate::errors::KoraError;
+use soroban_sdk::{contracttype, Env};
 
 /// Reentrancy guard using a simple flag-based approach.
 /// Prevents recursive calls within the same transaction.
@@ -13,7 +13,9 @@ pub fn acquire_guard(env: &Env) -> Result<(), KoraError> {
     if env.storage().instance().has(&GuardKey::ReentrancyGuard) {
         return Err(KoraError::Unauthorized);
     }
-    env.storage().instance().set(&GuardKey::ReentrancyGuard, &true);
+    env.storage()
+        .instance()
+        .set(&GuardKey::ReentrancyGuard, &true);
     Ok(())
 }
 

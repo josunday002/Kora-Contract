@@ -1,7 +1,7 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 use kora_shared::{errors::KoraError, events};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env};
 
 // ── TTL constants (~30 days) ──────────────────────────────────────────────────
 const PERSISTENT_TTL_THRESHOLD: u32 = 518_400;
@@ -163,9 +163,7 @@ impl AccessControlContract {
         if existing != Role::None && existing != Role::Admin {
             return Err(KoraError::Unauthorized);
         }
-        env.storage()
-            .instance()
-            .set(&DataKey::Admin, &new_admin);
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
         env.storage()
             .persistent()
             .set(&DataKey::Role(new_admin.clone()), &Role::Admin);
@@ -181,7 +179,10 @@ impl AccessControlContract {
     // ── Views ─────────────────────────────────────────────────────────────────
 
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     pub fn get_role(env: Env, address: Address) -> Role {
@@ -219,317 +220,6 @@ impl AccessControlContract {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
-
-    fn setup() -> (Env, Address, AccessControlContractClient<'static>) {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, AccessControlContract);
-        let client = AccessControlContractClient::new(&env, &contract_id);
-        let admin = Address::generate(&env);
-        client.initialize(&admin);
-        (env, admin, client)
-    }
-
-    // ── initialize ────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_initialize_success() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, AccessControlContract);
-        let client = AccessControlContractClient::new(&env, &contract_id);
-        let admin = Address::generate(&env);
-        assert!(client.try_initialize(&admin).is_ok());
-        assert_eq!(client.get_admin(), admin);
-        assert_eq!(client.get_role(&admin), Role::Admin);
-        assert!(!client.is_paused());
-    }
-
-    #[test]
-    fn test_initialize_already_initialized() {
-        let (_, admin, client) = setup();
-        assert!(client.try_initialize(&admin).is_err());
-    }
-
-    // ── pause / unpause ───────────────────────────────────────────────────────
-
-    #[test]
-    fn test_pause_unpause() {
-        let (_, admin, client) = setup();
-        assert!(!client.is_paused());
-        client.pause(&admin);
-        assert!(client.is_paused());
-        client.unpause(&admin);
-        assert!(!client.is_paused());
-    }
-
-    #[test]
-    fn test_pause_already_paused() {
-        let (_, admin, client) = setup();
-        client.pause(&admin);
-        // Second pause must fail with AlreadyPaused, not silently succeed
-        let result = client.try_pause(&admin);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_unpause_when_not_paused() {
-        let (_, admin, client) = setup();
-        // Unpause on a non-paused contract must fail with NotPaused
-        let result = client.try_unpause(&admin);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_non_admin_cannot_pause() {
-        let (env, _, client) = setup();
-        let stranger = Address::generate(&env);
-        assert!(client.try_pause(&stranger).is_err());
-    }
-
-    #[test]
-    fn test_non_admin_cannot_unpause() {
-        let (env, admin, client) = setup();
-        client.pause(&admin);
-        let stranger = Address::generate(&env);
-        assert!(client.try_unpause(&stranger).is_err());
-    }
-
-    #[test]
-    fn test_pause_unpause_cycle_multiple_times() {
-        let (_, admin, client) = setup();
-        for _ in 0..3 {
-            client.pause(&admin);
-            assert!(client.is_paused());
-            client.unpause(&admin);
-            assert!(!client.is_paused());
-        }
-    }
-
-    // ── grant_role ────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_grant_role_operator() {
-        let (env, admin, client) = setup();
-        let operator = Address::generate(&env);
-        client.grant_role(&admin, &operator, &Role::Operator);
-        assert_eq!(client.get_role(&operator), Role::Operator);
-    }
-
-    #[test]
-    fn test_grant_role_verifier() {
-        let (env, admin, client) = setup();
-        let verifier = Address::generate(&env);
-        client.grant_role(&admin, &verifier, &Role::Verifier);
-        assert_eq!(client.get_role(&verifier), Role::Verifier);
-    }
-
-    #[test]
-    fn test_grant_role_admin_forbidden() {
-        // Cannot grant Role::Admin — must use transfer_admin
-        let (env, admin, client) = setup();
-        let target = Address::generate(&env);
-        assert!(client.try_grant_role(&admin, &target, &Role::Admin).is_err());
-    }
-
-    #[test]
-    fn test_grant_role_none_forbidden() {
-        // Cannot grant Role::None — must use revoke_role
-        let (env, admin, client) = setup();
-        let target = Address::generate(&env);
-        assert!(client.try_grant_role(&admin, &target, &Role::None).is_err());
-    }
-
-    #[test]
-    fn test_grant_role_to_admin_self_forbidden() {
-        // Admin cannot grant a role to their own address
-        let (_, admin, client) = setup();
-        assert!(client.try_grant_role(&admin, &admin, &Role::Operator).is_err());
-    }
-
-    #[test]
-    fn test_grant_role_non_admin_forbidden() {
-        let (env, _, client) = setup();
-        let stranger = Address::generate(&env);
-        let target = Address::generate(&env);
-        assert!(client.try_grant_role(&stranger, &target, &Role::Verifier).is_err());
-    }
-
-    #[test]
-    fn test_grant_role_override() {
-        let (env, admin, client) = setup();
-        let user = Address::generate(&env);
-        client.grant_role(&admin, &user, &Role::Operator);
-        assert_eq!(client.get_role(&user), Role::Operator);
-        client.grant_role(&admin, &user, &Role::Verifier);
-        assert_eq!(client.get_role(&user), Role::Verifier);
-    }
-
-    #[test]
-    fn test_grant_role_multiple_users() {
-        let (env, admin, client) = setup();
-        let v1 = Address::generate(&env);
-        let v2 = Address::generate(&env);
-        let op = Address::generate(&env);
-        client.grant_role(&admin, &v1, &Role::Verifier);
-        client.grant_role(&admin, &v2, &Role::Verifier);
-        client.grant_role(&admin, &op, &Role::Operator);
-        assert_eq!(client.get_role(&v1), Role::Verifier);
-        assert_eq!(client.get_role(&v2), Role::Verifier);
-        assert_eq!(client.get_role(&op), Role::Operator);
-    }
-
-    // ── revoke_role ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_revoke_role_success() {
-        let (env, admin, client) = setup();
-        let operator = Address::generate(&env);
-        client.grant_role(&admin, &operator, &Role::Operator);
-        assert_eq!(client.get_role(&operator), Role::Operator);
-        client.revoke_role(&admin, &operator);
-        assert_eq!(client.get_role(&operator), Role::None);
-    }
-
-    #[test]
-    fn test_revoke_role_admin_forbidden() {
-        // Cannot revoke the admin's own role
-        let (_, admin, client) = setup();
-        assert!(client.try_revoke_role(&admin, &admin).is_err());
-    }
-
-    #[test]
-    fn test_revoke_role_not_assigned() {
-        // Revoking a role from an address that has none must fail
-        let (env, admin, client) = setup();
-        let stranger = Address::generate(&env);
-        assert!(client.try_revoke_role(&admin, &stranger).is_err());
-    }
-
-    #[test]
-    fn test_revoke_role_non_admin_forbidden() {
-        let (env, admin, client) = setup();
-        let operator = Address::generate(&env);
-        let stranger = Address::generate(&env);
-        client.grant_role(&admin, &operator, &Role::Operator);
-        assert!(client.try_revoke_role(&stranger, &operator).is_err());
-    }
-
-    #[test]
-    fn test_revoke_then_re_grant() {
-        let (env, admin, client) = setup();
-        let user = Address::generate(&env);
-        client.grant_role(&admin, &user, &Role::Verifier);
-        client.revoke_role(&admin, &user);
-        assert_eq!(client.get_role(&user), Role::None);
-        // Re-granting after revoke must work
-        client.grant_role(&admin, &user, &Role::Operator);
-        assert_eq!(client.get_role(&user), Role::Operator);
-    }
-
-    // ── transfer_admin ────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_transfer_admin_success() {
-        let (env, admin, client) = setup();
-        let new_admin = Address::generate(&env);
-        client.transfer_admin(&admin, &new_admin);
-        assert_eq!(client.get_admin(), new_admin);
-        assert_eq!(client.get_role(&new_admin), Role::Admin);
-        // Old admin's role entry must be removed
-        assert_eq!(client.get_role(&admin), Role::None);
-    }
-
-    #[test]
-    fn test_transfer_admin_to_self_forbidden() {
-        let (_, admin, client) = setup();
-        assert!(client.try_transfer_admin(&admin, &admin).is_err());
-    }
-
-    #[test]
-    fn test_transfer_admin_non_admin_forbidden() {
-        let (env, _, client) = setup();
-        let stranger = Address::generate(&env);
-        let new_admin = Address::generate(&env);
-        assert!(client.try_transfer_admin(&stranger, &new_admin).is_err());
-    }
-
-    #[test]
-    fn test_transfer_admin_to_existing_role_holder_forbidden() {
-        // new_admin already has Operator role — transfer must fail to avoid silent overwrite
-        let (env, admin, client) = setup();
-        let operator = Address::generate(&env);
-        client.grant_role(&admin, &operator, &Role::Operator);
-        assert!(client.try_transfer_admin(&admin, &operator).is_err());
-    }
-
-    #[test]
-    fn test_transfer_admin_to_verifier_forbidden() {
-        let (env, admin, client) = setup();
-        let verifier = Address::generate(&env);
-        client.grant_role(&admin, &verifier, &Role::Verifier);
-        assert!(client.try_transfer_admin(&admin, &verifier).is_err());
-    }
-
-    #[test]
-    fn test_transfer_admin_old_admin_loses_privileges() {
-        let (env, admin, client) = setup();
-        let new_admin = Address::generate(&env);
-        client.transfer_admin(&admin, &new_admin);
-        // Old admin can no longer pause
-        assert!(client.try_pause(&admin).is_err());
-    }
-
-    #[test]
-    fn test_transfer_admin_new_admin_can_act() {
-        let (env, admin, client) = setup();
-        let new_admin = Address::generate(&env);
-        client.transfer_admin(&admin, &new_admin);
-        // New admin can pause
-        assert!(client.try_pause(&new_admin).is_ok());
-    }
-
-    #[test]
-    fn test_transfer_admin_chain() {
-        // A → B → C
-        let (env, admin_a, client) = setup();
-        let admin_b = Address::generate(&env);
-        let admin_c = Address::generate(&env);
-        client.transfer_admin(&admin_a, &admin_b);
-        assert_eq!(client.get_admin(), admin_b);
-        client.transfer_admin(&admin_b, &admin_c);
-        assert_eq!(client.get_admin(), admin_c);
-        assert_eq!(client.get_role(&admin_a), Role::None);
-        assert_eq!(client.get_role(&admin_b), Role::None);
-        assert_eq!(client.get_role(&admin_c), Role::Admin);
-    }
-
-    // ── get_admin ─────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_get_admin_before_init_fails() {
-        let env = Env::default();
-        env.mock_all_auths();
-        let contract_id = env.register_contract(None, AccessControlContract);
-        let client = AccessControlContractClient::new(&env, &contract_id);
-        assert!(client.try_get_admin().is_err());
-    }
-
-    // ── get_role ──────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_get_role_unknown_address_returns_none() {
-        let (env, _, client) = setup();
-        let unknown = Address::generate(&env);
-        assert_eq!(client.get_role(&unknown), Role::None);
-    }
-}
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -582,10 +272,7 @@ mod tests {
     fn test_initialize_already_initialized_returns_correct_error() {
         let (_, admin, client) = setup();
         let result = client.try_initialize(&admin);
-        assert_eq!(
-            result.unwrap_err().unwrap(),
-            KoraError::AlreadyInitialized
-        );
+        assert_eq!(result.unwrap_err().unwrap(), KoraError::AlreadyInitialized);
     }
 
     #[test]
@@ -740,7 +427,9 @@ mod tests {
                 sub_invokes: &[],
             },
         }]);
-        assert!(client.try_grant_role(&admin, &target, &Role::Verifier).is_ok());
+        assert!(client
+            .try_grant_role(&admin, &target, &Role::Verifier)
+            .is_ok());
     }
 
     #[test]
@@ -992,7 +681,9 @@ mod tests {
         assert!(client.try_pause(&admin).is_err());
         // Old admin cannot grant roles
         let target = Address::generate(&env);
-        assert!(client.try_grant_role(&admin, &target, &Role::Verifier).is_err());
+        assert!(client
+            .try_grant_role(&admin, &target, &Role::Verifier)
+            .is_err());
         // Old admin cannot transfer admin again
         assert!(client.try_transfer_admin(&admin, &target).is_err());
     }
