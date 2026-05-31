@@ -23,6 +23,8 @@ pub enum RiskTier {
 }
 
 impl RiskTier {
+    /// OPT: Mark for inlining - simple range-based match, called frequently during minting
+    #[inline]
     pub fn from_score(score: u32) -> RiskTier {
         match score {
             0..=20 => RiskTier::AAA,
