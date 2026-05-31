@@ -639,7 +639,7 @@ mod tests {
         let debtor_hash = Bytes::from_slice(&env, &[0xABu8; 32]);
         client.add_verifier(&admin, &verifier);
         client.set_debtor_score(&verifier, &debtor_hash, &45u32);
-        assert_eq!(client.get_debtor_score(&debtor_hash).unwrap(), 45u32);
+        assert_eq!(client.get_debtor_score(&debtor_hash), 45u32);
     }
 
     #[test]
@@ -684,11 +684,11 @@ mod tests {
 
         let hash0 = Bytes::from_slice(&env, &[0x01u8; 32]);
         client.set_debtor_score(&verifier, &hash0, &0u32);
-        assert_eq!(client.get_debtor_score(&hash0).unwrap(), 0u32);
+        assert_eq!(client.get_debtor_score(&hash0), 0u32);
 
         let hash100 = Bytes::from_slice(&env, &[0x02u8; 32]);
         client.set_debtor_score(&verifier, &hash100, &100u32);
-        assert_eq!(client.get_debtor_score(&hash100).unwrap(), 100u32);
+        assert_eq!(client.get_debtor_score(&hash100), 100u32);
 
         let hash_invalid = Bytes::from_slice(&env, &[0x03u8; 32]);
         assert!(client.try_set_debtor_score(&verifier, &hash_invalid, &101u32).is_err());

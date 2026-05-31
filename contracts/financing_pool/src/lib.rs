@@ -221,7 +221,7 @@ impl FinancingPoolContract {
             .get(&DataKey::Positions(invoice_id))
             .unwrap_or(Map::new(env));
 
-        let token_client = token::Client::new(env, token);
+        let token_client = token::Client::new(&env, &token);
 
         for (investor, position) in positions.iter() {
             let payout = bps_of(total_repaid, position.share_bps)?;

@@ -428,7 +428,7 @@ mod tests {
     fn test_list_invoice_success() {
         let t = deploy();
         let id = list_one(&t);
-        let listing = t.mp.get_listing(&id).unwrap();
+        let listing = t.mp.get_listing(&id);
         assert_eq!(listing.invoice_id, 1);
         assert_eq!(listing.seller, t.seller);
         assert_eq!(listing.asking_price, 9_500_000_000i128);
@@ -544,7 +544,7 @@ mod tests {
             &t.seller, &1u64, &9_500_000_000i128, &10_000_000_000i128,
             &t.token, &deadline,
         );
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert_eq!(listing.asking_price, 9_500_000_000i128);
         assert_eq!(listing.face_value, 10_000_000_000i128);
         assert_eq!(listing.funding_deadline, deadline);
@@ -622,7 +622,7 @@ mod tests {
         let investor = Address::generate(&t.env);
         // Partial fund — token transfer will be mocked
         t.mp.fund_invoice(&investor, &1u64, &1_000_000_000i128);
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert_eq!(listing.funded_amount, 1_000_000_000i128);
         assert!(listing.is_active); // not yet fully funded
     }
@@ -638,7 +638,7 @@ mod tests {
         let investor = Address::generate(&t.env);
         let amount = 10_000_000i128;
         t.mp.fund_invoice(&investor, &1u64, &amount);
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert_eq!(listing.funded_amount, amount);
     }
 
@@ -650,7 +650,7 @@ mod tests {
         let inv2 = Address::generate(&t.env);
         t.mp.fund_invoice(&inv1, &1u64, &4_000_000_000i128);
         t.mp.fund_invoice(&inv2, &1u64, &4_000_000_000i128);
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert_eq!(listing.funded_amount, 8_000_000_000i128);
         assert!(listing.is_active);
     }
@@ -662,7 +662,7 @@ mod tests {
         let investor = Address::generate(&t.env);
         // Fund the full asking price in one go
         t.mp.fund_invoice(&investor, &1u64, &9_500_000_000i128);
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert!(!listing.is_active);
         assert_eq!(listing.funded_amount, 9_500_000_000i128);
     }
@@ -674,7 +674,7 @@ mod tests {
         let t = deploy();
         list_one(&t);
         assert!(t.mp.try_cancel_listing(&t.seller, &1u64).is_ok());
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert!(!listing.is_active);
     }
 
@@ -683,7 +683,7 @@ mod tests {
         let t = deploy();
         list_one(&t);
         assert!(t.mp.try_cancel_listing(&t.admin, &1u64).is_ok());
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert!(!listing.is_active);
     }
 
@@ -719,7 +719,7 @@ mod tests {
         let stranger = Address::generate(&t.env);
         let _ = t.mp.try_cancel_listing(&stranger, &1u64);
         // Listing must still be active
-        let listing = t.mp.get_listing(&1u64).unwrap();
+        let listing = t.mp.get_listing(&1u64);
         assert!(listing.is_active);
     }
 
