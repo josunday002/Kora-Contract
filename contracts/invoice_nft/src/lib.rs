@@ -19,7 +19,6 @@ pub enum DataKey {
     NextId,
     Admin,
     AccessControl,
-    InvoiceCount,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -86,17 +85,6 @@ impl InvoiceNftContract {
         env.storage().instance().set(
             &DataKey::NextId,
             &(id.checked_add(1).ok_or(KoraError::ArithmeticOverflow)?),
-        );
-
-        // Increment invoice count for metrics
-        let count: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::InvoiceCount)
-            .unwrap_or(0);
-        env.storage().instance().set(
-            &DataKey::InvoiceCount,
-            &(count.checked_add(1).ok_or(KoraError::ArithmeticOverflow)?),
         );
 
         events::invoice_created(&env, id, &sme, amount);
@@ -181,11 +169,9 @@ impl InvoiceNftContract {
         env.storage().instance().get(&DataKey::NextId).unwrap_or(1)
     }
 
+    /// Returns the number of invoices minted (next_id - 1).
     pub fn invoice_count(env: Env) -> u64 {
-        env.storage()
-            .instance()
-            .get(&DataKey::InvoiceCount)
-            .unwrap_or(0)
+        env.storage().instance().get::<_, u64>(&DataKey::NextId).unwrap_or(1).saturating_sub(1)
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -210,9 +196,14 @@ impl InvoiceNftContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), KoraError> {
-        // Reads paused flag stored by AccessControl contract via cross-contract call
-        // For now, local guard — AccessControl integration wired at deployment
-        let _ = env;
+        let ac: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccessControl)
+            .ok_or(KoraError::NotInitialized)?;
+        let _ = ac;
+        // Cross-contract pause check wired at deployment via AccessControl contract.
+        // Local guard: no-op until cross-contract call is integrated.
         Ok(())
     }
 }
