@@ -9,6 +9,11 @@ const PERSISTENT_TTL_BUMP: u32 = 518_400;
 
 // ── Storage Keys ─────────────────────────────────────────────────────────────
 
+/// Storage key variants for the access control contract.
+///
+/// - `Admin` — stores the current admin address (instance storage)
+/// - `Paused` — stores the protocol pause flag (instance storage)
+/// - `Role(Address)` — maps addresses to their assigned roles (persistent storage)
 #[contracttype]
 pub enum DataKey {
     /// Admin address — persistent so it survives ledger archival.

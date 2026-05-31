@@ -1,5 +1,16 @@
 #![no_std]
 
+//! # Invoice NFT Contract
+//!
+//! Mints and manages invoice NFTs as the canonical source of truth for invoice state.
+//!
+//! Each invoice is an immutable NFT with a unique ID, representing a real-world invoice
+//! with fields such as amount, due date, debtor information (hashed), and repayment status.
+//!
+//! **Lifecycle:** `Created` → `Listed` → `Funded` → `Repaid` | `Defaulted`
+//!
+//! See [Invoice NFT Model](../../../docs/invoice-nft.md) for detailed architecture.
+
 use kora_shared::{
     errors::KoraError,
     events,
@@ -24,6 +35,13 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Str
 // - InvoiceCount: Stores total count of invoices minted (instance)
 // - MigrationVersion: Tracks current schema version for upgrade safety (instance)
 
+/// Storage key variants for the invoice NFT contract.
+///
+/// - `Invoice(u64)` — Maps invoice ID to the full `Invoice` struct (persistent)
+/// - `NextId` — Stores the next invoice ID to be allocated (instance)
+/// - `Admin` — Stores the contract admin address (instance)
+/// - `AccessControl` — Stores the access control contract address (instance)
+/// - `InvoiceCount` — Stores total invoice count for metrics (instance)
 #[contracttype]
 pub enum DataKey {
     /// Versioned invoice storage: Invoice(id) stores Invoice struct
@@ -208,10 +226,23 @@ impl InvoiceNftContract {
 
     // ── Views ────────────────────────────────────────────────────────────────
 
+    /// Retrieve a full invoice by ID.
+    ///
+    /// **Parameters:**
+    /// - `invoice_id` — The ID of the invoice to retrieve.
+    ///
+    /// **Returns:** The complete `Invoice` struct, or `KoraError::InvoiceNotFound` if not found.
+    ///
+    /// **Security:** This is a read-only view with no authorization check.
     pub fn get_invoice(env: Env, invoice_id: u64) -> Result<Invoice, KoraError> {
         Self::load_invoice(&env, invoice_id)
     }
 
+    /// Get the next invoice ID that will be allocated.
+    ///
+    /// **Returns:** The ID of the next invoice to be minted (starting at 1).
+    ///
+    /// **Security:** This is a read-only view with no authorization check.
     pub fn next_id(env: Env) -> u64 {
         env.storage().instance().get(&DataKey::NextId).unwrap_or(1)
     }

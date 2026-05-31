@@ -143,7 +143,7 @@ pub fn safe_mul(a: i128, b: i128) -> Result<i128, KoraError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::Env;
+    use soroban_sdk::{testutils::Ledger, Env, String as SorobanString};
 
     #[test]
     fn test_require_non_zero_amount() {
@@ -165,6 +165,69 @@ mod tests {
         assert!(require_amount_within_bounds(0, 100).is_ok());
         assert!(require_amount_within_bounds(100, 100).is_ok());
         assert!(require_amount_within_bounds(101, 100).is_err());
+    }
+
+    #[test]
+    fn test_require_future_timestamp() {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000_000);
+
+        assert!(require_future_timestamp(&env, 1_000_000).is_err()); // equal (not future)
+        assert!(require_future_timestamp(&env, 999_999).is_err()); // past
+        assert!(require_future_timestamp(&env, 1_000_001).is_ok()); // future
+    }
+
+    #[test]
+    fn test_require_valid_risk_score() {
+        assert!(require_valid_risk_score(0).is_ok());
+        assert!(require_valid_risk_score(50).is_ok());
+        assert!(require_valid_risk_score(100).is_ok());
+        assert!(require_valid_risk_score(101).is_err());
+    }
+
+    #[test]
+    fn test_require_non_empty_string() {
+        let env = Env::default();
+        let empty_str = SorobanString::from_str(&env, "");
+        let non_empty_str = SorobanString::from_str(&env, "test");
+
+        assert!(require_non_empty_string(&empty_str).is_err());
+        assert!(require_non_empty_string(&non_empty_str).is_ok());
+    }
+
+    #[test]
+    // AUDIT FIX: Test for new EmptyBytes error variant
+    fn test_require_non_empty_bytes() {
+        let env = Env::default();
+        let empty_bytes = Bytes::from_slice(&env, &[]);
+        let non_empty_bytes = Bytes::from_slice(&env, &[1, 2, 3]);
+
+        let empty_result = require_non_empty_bytes(&empty_bytes);
+        assert!(empty_result.is_err());
+        assert_eq!(
+            empty_result.unwrap_err(),
+            KoraError::EmptyBytes,
+            "Empty bytes should return EmptyBytes error"
+        );
+
+        assert!(require_non_empty_bytes(&non_empty_bytes).is_ok());
+    }
+
+    #[test]
+    fn test_require_valid_fee_bps() {
+        assert!(require_valid_fee_bps(0).is_ok());
+        assert!(require_valid_fee_bps(50).is_ok());
+        assert!(require_valid_fee_bps(10_000).is_ok());
+        assert!(require_valid_fee_bps(10_001).is_err());
+    }
+
+    #[test]
+    fn test_require_amount_within_bounds() {
+        assert!(require_amount_within_bounds(0, 1_000).is_ok());
+        assert!(require_amount_within_bounds(500, 1_000).is_ok());
+        assert!(require_amount_within_bounds(1_000, 1_000).is_ok());
+        assert!(require_amount_within_bounds(1_001, 1_000).is_err());
+        assert!(require_amount_within_bounds(-1, 1_000).is_err());
     }
 
     #[test]

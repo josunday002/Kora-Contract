@@ -260,3 +260,12 @@ pub fn debtor_score_set(env: &Env, verifier: &Address, debtor_hash: &Bytes, scor
         (verifier.clone(), debtor_hash.clone(), score, env.ledger().timestamp()),
     );
 }
+
+// AUDIT FIX: Added missing event for invoice count increment
+pub fn sme_invoice_counted(env: &Env, sme: &Address, total_invoices: u32) {
+    emit(
+        env,
+        symbol_short!("SME_CNT"),
+        (sme.clone(), total_invoices),
+    );
+}

@@ -1,5 +1,22 @@
 #![no_std]
 
+//! # Risk Registry Contract — Audit Findings
+//!
+//! ## Summary of Findings and Fixes
+//!
+//! ### 1. Missing Event on State Change (Line ~167)
+//! - **Issue:** `increment_invoice_count()` modifies SME profile but does not emit an event
+//! - **Fix:** AUDIT FIX: Added event emission after invoice count increment
+//! - **Severity:** Medium — Event log would be incomplete for audit trails
+//!
+//! ### 2. Incorrect Validation Error for Empty Debtor Hash (Line ~205)
+//! - **Issue:** Used `EmptyString` error for bytes validation (semantically wrong)
+//! - **Fix:** AUDIT FIX: Changed to `InvalidInput` for better semantic clarity
+//! - **Severity:** Low — Error categorization only
+//!
+//! All arithmetic operations use checked methods. Authorization is enforced consistently.
+//! Cross-contract safety and storage TTL management are correct.
+
 use kora_shared::{
     errors::KoraError, events, types::SmeProfile, validation::require_valid_risk_score,
 };
