@@ -219,7 +219,7 @@ impl FinancingPoolContract {
             .storage()
             .persistent()
             .get(&DataKey::Positions(invoice_id))
-            .unwrap_or(Map::new(env));
+            .unwrap_or(Map::new(&env));
 
         let token_client = token::Client::new(&env, &token);
 

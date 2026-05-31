@@ -15,12 +15,23 @@ use kora_shared::{
 #[contracttype]
 pub enum DataKey {
     Listing(u64),
+    Config,
     Admin,
     InvoiceNft,
     FinancingPool,
     Treasury,
     FeeBps,
     WhitelistedToken(Address),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketplaceConfig {
+    pub admin: Address,
+    pub invoice_nft: Address,
+    pub financing_pool: Address,
+    pub treasury: Address,
+    pub fee_bps: u32,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -38,7 +49,7 @@ impl MarketplaceContract {
         treasury: Address,
         fee_bps: u32,
     ) -> Result<(), KoraError> {
-        if env.storage().instance().has(&DataKey::Admin) {
+        if env.storage().instance().has(&DataKey::Config) {
             return Err(KoraError::AlreadyInitialized);
         }
         require_valid_fee_bps(fee_bps)?;
@@ -87,9 +98,10 @@ impl MarketplaceContract {
             return Err(KoraError::InvoiceAlreadyExists);
         }
 
+        let config = Self::load_config(&env)?;
+
         // Notify Invoice NFT contract to transition status
-        let nft_contract: Address = env.storage().instance().get(&DataKey::InvoiceNft).unwrap();
-        let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(&env, &nft_contract);
+        let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(&env, &config.invoice_nft);
         nft_client.set_listed(&env.current_contract_address(), &invoice_id);
 
         let listing = Listing {
@@ -194,8 +206,8 @@ impl MarketplaceContract {
             return Err(KoraError::ListingAlreadyCancelled);
         }
 
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
-        if caller != listing.seller && caller != admin {
+        let config = Self::load_config(&env)?;
+        if caller != listing.seller && caller != config.admin {
             return Err(KoraError::Unauthorized);
         }
 
@@ -245,15 +257,54 @@ impl MarketplaceContract {
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), KoraError> {
+        let config = Self::load_config(env)?;
+        if &config.admin != caller {
+            return Err(KoraError::NotAdmin);
+        }
+        Ok(())
+    }
+
+    fn load_config(env: &Env) -> Result<MarketplaceConfig, KoraError> {
+        if let Some(config) = env.storage().instance().get(&DataKey::Config) {
+            return Ok(config);
+        }
+
+        // Legacy migration path: read individual keys and persist a consolidated config.
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(KoraError::NotInitialized)?;
-        if &admin != caller {
-            return Err(KoraError::NotAdmin);
-        }
-        Ok(())
+        let invoice_nft: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::InvoiceNft)
+            .ok_or(KoraError::NotInitialized)?;
+        let financing_pool: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FinancingPool)
+            .ok_or(KoraError::NotInitialized)?;
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Treasury)
+            .ok_or(KoraError::NotInitialized)?;
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeBps)
+            .ok_or(KoraError::NotInitialized)?;
+
+        let config = MarketplaceConfig {
+            admin,
+            invoice_nft,
+            financing_pool,
+            treasury,
+            fee_bps,
+        };
+        env.storage().instance().set(&DataKey::Config, &config);
+        Ok(config)
     }
 }
 
@@ -279,6 +330,8 @@ mod tests {
         admin: Address,
         token: Address,
         seller: Address,
+        treasury: Address,
+        pool: Address,
         mp: MarketplaceContractClient<'static>,
         nft: InvoiceNftContractClient<'static>,
     }
@@ -323,7 +376,7 @@ mod tests {
 
         let seller = Address::generate(&env);
 
-        TestEnv { env, admin, token, seller, mp, nft }
+        TestEnv { env, admin, token, seller, treasury, pool: pool_id, mp, nft }
     }
 
     /// Convenience: list an invoice with standard params, returns invoice_id=1.
@@ -383,6 +436,47 @@ mod tests {
             &10_001u32, // > 100%
         );
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_config_returns_initialized_values() {
+        let t = deploy();
+        let config = t.mp.get_config();
+        assert_eq!(config.admin, t.admin);
+        assert_eq!(config.invoice_nft, t.nft.address);
+        assert_eq!(config.financing_pool, t.pool);
+        assert_eq!(config.treasury, t.treasury);
+        assert_eq!(config.fee_bps, 50u32);
+    }
+
+    #[test]
+    fn test_legacy_state_migrates_to_config() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let treasury = Address::generate(&env);
+        let nft_id = env.register_contract(None, InvoiceNftContract);
+        let pool_id = env.register_contract(None, FinancingPoolContract);
+        let mp_id = env.register_contract(None, MarketplaceContract);
+        let mp = MarketplaceContractClient::new(&env, &mp_id);
+
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::InvoiceNft, &nft_id);
+        env.storage().instance().set(&DataKey::FinancingPool, &pool_id);
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
+        env.storage().instance().set(&DataKey::FeeBps, &75u32);
+
+        let migrated = mp.get_config();
+        assert_eq!(migrated.admin, admin);
+        assert_eq!(migrated.invoice_nft, nft_id);
+        assert_eq!(migrated.financing_pool, pool_id);
+        assert_eq!(migrated.treasury, treasury);
+        assert_eq!(migrated.fee_bps, 75u32);
+
+        // Config should be persisted after fallback migration.
+        let reloaded = mp.get_config();
+        assert_eq!(reloaded, migrated);
     }
 
     // ── whitelist_token ───────────────────────────────────────────────────────
