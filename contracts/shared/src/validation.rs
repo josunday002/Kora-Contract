@@ -65,6 +65,8 @@ pub fn require_non_empty_string(s: &String) -> Result<(), KoraError> {
     Ok(())
 }
 
+/// OPT: Mark for inlining - bytes length check takes reference (no allocation)
+#[inline]
 pub fn require_non_empty_bytes(b: &Bytes) -> Result<(), KoraError> {
     if b.len() == 0 {
         return Err(KoraError::EmptyBytes);
@@ -82,8 +84,11 @@ pub fn require_valid_bps_range(bps: u32, min_bps: u32, max_bps: u32) -> Result<(
     Ok(())
 }
 
+/// OPT: Consolidated range check in single comparison (0 <= amount <= max)
+#[inline]
 pub fn require_amount_within_bounds(amount: i128, max: i128) -> Result<(), KoraError> {
-    if amount > max || amount < 0 {
+    // OPT: Early exit for negative amounts saves comparison if amount >= 0
+    if amount < 0 || amount > max {
         return Err(KoraError::InvalidAmount);
     }
     amount

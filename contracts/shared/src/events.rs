@@ -10,23 +10,37 @@ pub fn invoice_created(env: &Env, invoice_id: u64, sme: &Address, amount: i128) 
     emit(
         env,
         symbol_short!("INV_CRT"),
-        (invoice_id, sme.clone(), amount),
+        (invoice_id, sme.clone(), amount, env.ledger().timestamp()),
     );
 }
 
+/// Standardized marketplace event: invoice listed for financing.
+/// Schema: topic, actor (seller), listing (invoice_id), amount (asking_price), ledger_seq (timestamp)
 pub fn invoice_listed(env: &Env, invoice_id: u64, seller: &Address, asking_price: i128) {
     emit(
         env,
         symbol_short!("INV_LST"),
-        (invoice_id, seller.clone(), asking_price),
+        (
+            seller.clone(),
+            invoice_id,
+            asking_price,
+            env.ledger().timestamp(),
+        ),
     );
 }
 
+/// Standardized marketplace event: investor funded a listing.
+/// Schema: topic, actor (investor), listing (invoice_id), amount (funded_amount), ledger_seq (timestamp)
 pub fn invoice_funded(env: &Env, invoice_id: u64, investor: &Address, amount: i128) {
     emit(
         env,
         symbol_short!("INV_FND"),
-        (invoice_id, investor.clone(), amount),
+        (
+            investor.clone(),
+            invoice_id,
+            amount,
+            env.ledger().timestamp(),
+        ),
     );
 }
 
@@ -39,7 +53,11 @@ pub fn invoice_repaid(env: &Env, invoice_id: u64, sme: &Address, amount: i128) {
 }
 
 pub fn invoice_defaulted(env: &Env, invoice_id: u64, sme: &Address) {
-    emit(env, symbol_short!("INV_DFT"), (invoice_id, sme.clone()));
+    emit(
+        env,
+        symbol_short!("INV_DFT"),
+        (invoice_id, sme.clone(), env.ledger().timestamp()),
+    );
 }
 
 // ── Repayment Events ──────────────────────────────────────────────────────────
@@ -70,6 +88,8 @@ pub fn listing_cancelled(env: &Env, invoice_id: u64, seller: &Address) {
     );
 }
 
+/// Standardized marketplace event: listing expired (funding deadline passed).
+/// Schema: topic, actor (seller), listing (invoice_id), amount (0), ledger_seq (timestamp)
 pub fn listing_expired(env: &Env, invoice_id: u64, seller: &Address) {
     emit(
         env,
@@ -80,11 +100,18 @@ pub fn listing_expired(env: &Env, invoice_id: u64, seller: &Address) {
 
 // ── Fee Events ────────────────────────────────────────────────────────────────
 
-pub fn fee_collected(env: &Env, invoice_id: u64, fee_amount: i128, token: &Address) {
+/// Standardized marketplace event: fee collected from funding.
+/// Schema: topic, actor (investor), listing (invoice_id), amount (fee_amount), ledger_seq (timestamp)
+pub fn fee_collected(env: &Env, invoice_id: u64, investor: &Address, fee_amount: i128) {
     emit(
         env,
         symbol_short!("FEE_COL"),
-        (invoice_id, fee_amount, token.clone()),
+        (
+            investor.clone(),
+            invoice_id,
+            fee_amount,
+            env.ledger().timestamp(),
+        ),
     );
 }
 

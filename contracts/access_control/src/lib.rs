@@ -381,7 +381,9 @@ mod tests {
         // Cannot grant Role::Admin — must use transfer_admin
         let (env, admin, client) = setup();
         let target = Address::generate(&env);
-        assert!(client.try_grant_role(&admin, &target, &Role::Admin).is_err());
+        assert!(client
+            .try_grant_role(&admin, &target, &Role::Admin)
+            .is_err());
     }
 
     #[test]
@@ -396,7 +398,9 @@ mod tests {
     fn test_grant_role_to_admin_self_forbidden() {
         // Admin cannot grant a role to their own address
         let (_, admin, client) = setup();
-        assert!(client.try_grant_role(&admin, &admin, &Role::Operator).is_err());
+        assert!(client
+            .try_grant_role(&admin, &admin, &Role::Operator)
+            .is_err());
     }
 
     #[test]
@@ -404,7 +408,9 @@ mod tests {
         let (env, _, client) = setup();
         let stranger = Address::generate(&env);
         let target = Address::generate(&env);
-        assert!(client.try_grant_role(&stranger, &target, &Role::Verifier).is_err());
+        assert!(client
+            .try_grant_role(&stranger, &target, &Role::Verifier)
+            .is_err());
     }
 
     #[test]

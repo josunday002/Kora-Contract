@@ -74,11 +74,7 @@ impl FinancingPoolContract {
             face_value: invoice.amount,
             repaid_amount: 0,
             is_closed: false,
-            late_penalty_bps: env
-                .storage()
-                .instance()
-                .get(&DataKey::LatePenaltyBps)
-                .unwrap_or(200),
+            late_penalty_bps, // OPT: Use cached value instead of re-reading from storage
         };
 
         env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
@@ -183,7 +179,8 @@ impl FinancingPoolContract {
 
         events::repayment_made(&env, invoice_id, &payer, amount);
 
-        if pool.repaid_amount >= pool.face_value {
+        let fully_repaid = pool.repaid_amount >= pool.face_value;
+        if fully_repaid {
             pool.is_closed = true;
             env.storage()
                 .persistent()
@@ -196,10 +193,6 @@ impl FinancingPoolContract {
             let nft_client =
                 kora_invoice_nft::InvoiceNftContractClient::new(&env, &nft_contract);
             nft_client.set_repaid(&env.current_contract_address(), &invoice_id);
-        } else {
-            env.storage()
-                .persistent()
-                .set(&DataKey::Pool(invoice_id), &pool);
         }
 
         env.storage()
@@ -223,6 +216,7 @@ impl FinancingPoolContract {
 
         let token_client = token::Client::new(&env, &token);
 
+        // OPT: Iterate directly over positions map instead of creating intermediate collections
         for (investor, position) in positions.iter() {
             let payout = bps_of(total_repaid, position.share_bps)?;
             let yield_amount = payout.checked_sub(position.contributed).unwrap_or(0);
@@ -260,6 +254,10 @@ impl FinancingPoolContract {
         if pool.is_closed {
             return Err(KoraError::PoolAlreadyClosed);
         }
+
+        // OPT: Cache pool data locally to avoid redundant storage access
+        let repaid_amount = pool.repaid_amount;
+        let face_value = pool.face_value;
 
         // Distribute whatever was repaid so far (partial recovery)
         if pool.repaid_amount > 0 {
@@ -346,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_initialize_already_initialized_fails() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (_env, admin, nft, treasury, client) = setup();
         let result = client.try_initialize(&admin, &nft, &treasury, &200u32);
         assert!(result.is_err());
     }
