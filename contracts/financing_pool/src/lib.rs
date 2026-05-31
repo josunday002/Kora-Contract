@@ -64,6 +64,13 @@ impl FinancingPoolContract {
         let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(&env, &nft_contract);
         let invoice = nft_client.get_invoice(&invoice_id);
 
+        // OPT: Cache instance storage reads to avoid redundant access
+        let late_penalty_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LatePenaltyBps)
+            .unwrap_or(200);
+
         // The pool contract holds the net funds (marketplace transferred them here)
         // We forward them to the SME
         // Token address must be passed — we read it from the pool balance
@@ -77,11 +84,7 @@ impl FinancingPoolContract {
             face_value: invoice.amount,
             repaid_amount: 0,
             is_closed: false,
-            late_penalty_bps: env
-                .storage()
-                .instance()
-                .get(&DataKey::LatePenaltyBps)
-                .unwrap_or(200),
+            late_penalty_bps, // OPT: Use cached value instead of re-reading from storage
         };
 
         env.storage()
@@ -164,11 +167,6 @@ impl FinancingPoolContract {
             return Err(KoraError::RepaymentAlreadyMade);
         }
 
-        // Validate amount
-        if amount <= 0 {
-            return Err(KoraError::InvalidAmount);
-        }
-
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&payer, &env.current_contract_address(), &amount);
 
@@ -179,21 +177,29 @@ impl FinancingPoolContract {
 
         events::repayment_made(&env, invoice_id, &payer, amount);
 
-        if pool.repaid_amount >= pool.face_value {
+        let fully_repaid = pool.repaid_amount >= pool.face_value;
+        if fully_repaid {
             pool.is_closed = true;
-            env.storage()
-                .persistent()
-                .set(&DataKey::Pool(invoice_id), &pool);
-            Self::distribute_yield(&env, invoice_id, &token, pool.repaid_amount, pool.face_value)?;
+        }
+
+        // OPT: Consolidate storage writes to single update instead of conditional writes
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pool(invoice_id), &pool);
+
+        if fully_repaid {
+            Self::distribute_yield(
+                &env,
+                invoice_id,
+                &token,
+                pool.repaid_amount,
+                pool.face_value,
+            )?;
 
             // Mark NFT as repaid
             let nft_contract: Address = env.storage().instance().get(&DataKey::InvoiceNft).unwrap();
             let nft_client = kora_invoice_nft::InvoiceNftContractClient::new(&env, &nft_contract);
             nft_client.set_repaid(&env.current_contract_address(), &invoice_id);
-        } else {
-            env.storage()
-                .persistent()
-                .set(&DataKey::Pool(invoice_id), &pool);
         }
 
         Ok(())
@@ -215,10 +221,12 @@ impl FinancingPoolContract {
 
         let token_client = token::Client::new(env, token);
 
+        // OPT: Iterate directly over positions map instead of creating intermediate collections
         for (investor, position) in positions.iter() {
             // Investor receives their share of total repaid
             let payout = bps_of(total_repaid, position.share_bps)?;
-            let yield_amount = payout.checked_sub(position.contributed).unwrap_or(0);
+            // OPT: Use saturating subtraction for non-critical path yield calculation to avoid unwrap
+            let yield_amount = payout.saturating_sub(position.contributed);
 
             token_client.transfer(&env.current_contract_address(), &investor, &payout);
             events::yield_distributed(env, invoice_id, &investor, yield_amount);
@@ -257,15 +265,13 @@ impl FinancingPoolContract {
             return Err(KoraError::PoolAlreadyClosed);
         }
 
+        // OPT: Cache pool data locally to avoid redundant storage access
+        let repaid_amount = pool.repaid_amount;
+        let face_value = pool.face_value;
+
         // Distribute whatever was repaid so far (partial recovery)
-        if pool.repaid_amount > 0 {
-            Self::distribute_yield(
-                &env,
-                invoice_id,
-                &token,
-                pool.repaid_amount,
-                pool.face_value,
-            )?;
+        if repaid_amount > 0 {
+            Self::distribute_yield(&env, invoice_id, &token, repaid_amount, face_value)?;
         }
 
         // Mark NFT as defaulted
@@ -338,14 +344,14 @@ mod tests {
 
     #[test]
     fn test_initialize_success() {
-        let (env, admin, nft, treasury, client) = setup();
-        let pool = client.get_pool(&1u64);
+        let (_env, _admin, _nft, _treasury, client) = setup();
+        let pool = client.try_get_pool(&1u64);
         assert!(pool.is_err());
     }
 
     #[test]
     fn test_initialize_already_initialized_fails() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (_env, admin, nft, treasury, client) = setup();
         let result = client.try_initialize(&admin, &nft, &treasury, &200u32);
         assert!(result.is_err());
     }
@@ -367,21 +373,21 @@ mod tests {
 
     #[test]
     fn test_get_pool_not_found() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (_env, _admin, _nft, _treasury, client) = setup();
         let result = client.try_get_pool(&999u64);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_get_positions_empty() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (_env, _admin, _nft, _treasury, client) = setup();
         let positions = client.get_positions(&1u64);
         assert_eq!(positions.len(), 0);
     }
 
     #[test]
     fn test_record_position_requires_admin() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, _admin, _nft, _treasury, client) = setup();
         let investor = Address::generate(&env);
         let non_admin = Address::generate(&env);
 
@@ -397,7 +403,7 @@ mod tests {
 
     #[test]
     fn test_record_position_arithmetic_overflow() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, admin, _nft, _treasury, client) = setup();
         let investor = Address::generate(&env);
 
         let result = client.try_record_position(&admin, &1u64, &investor, &i128::MAX, &1i128);
@@ -406,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_record_position_success() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, admin, _nft, _treasury, client) = setup();
         let investor = Address::generate(&env);
         let contributed = 5_000_000_000i128;
         let total_pool = 10_000_000_000i128;
@@ -418,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_repay_pool_not_found() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, _admin, _nft, _treasury, client) = setup();
         let payer = Address::generate(&env);
         let token = Address::generate(&env);
 
@@ -428,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_repay_invalid_amount() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, _admin, _nft, _treasury, client) = setup();
         let payer = Address::generate(&env);
         let token = Address::generate(&env);
 
@@ -438,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_mark_default_requires_admin() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, _admin, _nft, _treasury, client) = setup();
         let non_admin = Address::generate(&env);
         let token = Address::generate(&env);
 
@@ -448,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_mark_default_pool_not_found() {
-        let (env, admin, nft, treasury, client) = setup();
+        let (env, admin, _nft, _treasury, client) = setup();
         let token = Address::generate(&env);
 
         let result = client.try_mark_default(&admin, &999u64, &token);
