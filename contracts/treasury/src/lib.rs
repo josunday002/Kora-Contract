@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_initialize_success() {
+    fn test_initialize_creates_contract() {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, TreasuryContract);
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn test_withdraw_negative_amount_fails() {
+    fn test_withdraw_with_negative_amount_rejected() {
         let (env, admin, client) = setup();
         let token = Address::generate(&env);
         let recipient = Address::generate(&env);
