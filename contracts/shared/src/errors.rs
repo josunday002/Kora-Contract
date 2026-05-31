@@ -51,6 +51,8 @@ pub enum KoraError {
     ArithmeticOverflow = 90,
     InvalidAddress = 91,
     EmptyString = 92,
+    // AUDIT FIX: Added specific error variant for empty bytes (distinct from EmptyString)
+    EmptyBytes = 95,
     AlreadyInitialized = 93,
     NotInitialized = 94,
     Reentrancy = 95,
