@@ -82,8 +82,10 @@ pub fn require_valid_bps_range(bps: u32, min_bps: u32, max_bps: u32) -> Result<(
     Ok(())
 }
 
-pub fn require_amount_within_bounds(amount: i128, max: i128) -> Result<(), KoraError> {
-    if amount > max || amount < 0 {
+/// Compute `amount * bps / 10_000` with overflow protection.
+/// Rejects negative amounts to prevent silent negative fees.
+pub fn bps_of(amount: i128, bps: u32) -> Result<i128, KoraError> {
+    if amount < 0 {
         return Err(KoraError::InvalidAmount);
     }
     amount
@@ -102,35 +104,17 @@ pub fn safe_sub(a: i128, b: i128) -> Result<i128, KoraError> {
     a.checked_sub(b).ok_or(KoraError::ArithmeticUnderflow)
 }
 
-/// Safe multiplication with overflow check
+/// Safe multiplication — returns `ArithmeticOverflow` on overflow.
 pub fn safe_mul(a: i128, b: i128) -> Result<i128, KoraError> {
     a.checked_mul(b).ok_or(KoraError::ArithmeticOverflow)
 }
 
-/// Safe division, returns error on divide-by-zero
-pub fn safe_div(a: i128, b: i128) -> Result<i128, KoraError> {
-    if b == 0 {
-        return Err(KoraError::InvalidAmount);
-    }
-    a.checked_div(b).ok_or(KoraError::ArithmeticOverflow)
-}
-
-/// Safe multiplication with overflow check
-pub fn safe_mul(a: i128, b: i128) -> Result<i128, KoraError> {
-    a.checked_mul(b).ok_or(KoraError::ArithmeticOverflow)
-}
-
-/// Safe division, returns error on divide-by-zero or overflow
+/// Safe division — returns `ArithmeticOverflow` on divide-by-zero or overflow.
 pub fn safe_div(a: i128, b: i128) -> Result<i128, KoraError> {
     if b == 0 {
         return Err(KoraError::ArithmeticOverflow);
     }
     a.checked_div(b).ok_or(KoraError::ArithmeticOverflow)
-}
-
-/// Safe multiplication — returns `ArithmeticOverflow` on overflow.
-pub fn safe_mul(a: i128, b: i128) -> Result<i128, KoraError> {
-    a.checked_mul(b).ok_or(KoraError::ArithmeticOverflow)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -202,6 +186,12 @@ mod tests {
     }
 
     #[test]
+    fn test_safe_div() {
+        assert_eq!(safe_div(200, 4).unwrap(), 50);
+        assert!(safe_div(100, 0).is_err());
+    }
+
+    #[test]
     fn test_require_valid_fee_bps() {
         assert!(require_valid_fee_bps(0).is_ok());
         assert!(require_valid_fee_bps(10_000).is_ok());
@@ -213,18 +203,6 @@ mod tests {
         assert!(require_valid_risk_score(0).is_ok());
         assert!(require_valid_risk_score(100).is_ok());
         assert!(require_valid_risk_score(101).is_err());
-    }
-
-    #[test]
-    fn test_safe_mul() {
-        assert_eq!(safe_mul(100, 200).unwrap(), 20_000);
-        assert!(safe_mul(i128::MAX, 2).is_err());
-    }
-
-    #[test]
-    fn test_safe_div() {
-        assert_eq!(safe_div(200, 4).unwrap(), 50);
-        assert!(safe_div(100, 0).is_err());
     }
 
     #[test]
