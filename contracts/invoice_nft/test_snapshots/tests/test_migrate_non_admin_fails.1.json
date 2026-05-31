@@ -191,36 +191,11 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "mint_invoice"
+                "symbol": "migrate"
               }
             ],
             "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "bytes": ""
-                },
-                {
-                  "i128": {
-                    "hi": 0,
-                    "lo": 1000000000
-                  }
-                },
-                {
-                  "symbol": "USDC"
-                },
-                {
-                  "u64": 1700086400
-                },
-                {
-                  "string": "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
-                },
-                {
-                  "u32": 10
-                }
-              ]
+              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
             }
           }
         }
@@ -239,12 +214,12 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "mint_invoice"
+                "symbol": "migrate"
               }
             ],
             "data": {
               "error": {
-                "contract": 92
+                "contract": 2
               }
             }
           }
@@ -265,7 +240,7 @@
               },
               {
                 "error": {
-                  "contract": 92
+                  "contract": 2
                 }
               }
             ],
@@ -290,7 +265,7 @@
               },
               {
                 "error": {
-                  "contract": 92
+                  "contract": 2
                 }
               }
             ],
@@ -300,33 +275,12 @@
                   "string": "contract try_call failed"
                 },
                 {
-                  "symbol": "mint_invoice"
+                  "symbol": "migrate"
                 },
                 {
                   "vec": [
                     {
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                    },
-                    {
-                      "bytes": ""
-                    },
-                    {
-                      "i128": {
-                        "hi": 0,
-                        "lo": 1000000000
-                      }
-                    },
-                    {
-                      "symbol": "USDC"
-                    },
-                    {
-                      "u64": 1700086400
-                    },
-                    {
-                      "string": "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi"
-                    },
-                    {
-                      "u32": 10
                     }
                   ]
                 }
