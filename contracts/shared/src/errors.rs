@@ -55,4 +55,5 @@ pub enum KoraError {
     EmptyBytes = 95,
     AlreadyInitialized = 93,
     NotInitialized = 94,
+    Reentrancy = 95,
 }
