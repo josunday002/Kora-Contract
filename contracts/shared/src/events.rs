@@ -4,7 +4,7 @@ fn emit(env: &Env, topic: Symbol, data: impl soroban_sdk::IntoVal<Env, soroban_s
     env.events().publish((topic,), data);
 }
 
-// ── Invoice Events ──────────────────────────────────────────────────────────
+// ── Invoice Events ────────────────────────────────────────────────────────────
 
 pub fn invoice_created(env: &Env, invoice_id: u64, sme: &Address, amount: i128) {
     emit(
@@ -38,7 +38,7 @@ pub fn invoice_defaulted(env: &Env, invoice_id: u64, sme: &Address) {
     emit(env, symbol_short!("INV_DFT"), (invoice_id, sme.clone()));
 }
 
-// ── Repayment Events ────────────────────────────────────────────────────────
+// ── Repayment Events ──────────────────────────────────────────────────────────
 
 pub fn repayment_made(env: &Env, invoice_id: u64, payer: &Address, amount: i128) {
     emit(
@@ -59,11 +59,19 @@ pub fn yield_distributed(env: &Env, invoice_id: u64, investor: &Address, yield_a
 // ── Marketplace Events ──────────────────────────────────────────────────────
 
 pub fn listing_cancelled(env: &Env, invoice_id: u64, seller: &Address) {
-    emit(env, symbol_short!("LST_CXL"), (invoice_id, seller.clone(), env.ledger().timestamp()));
+    emit(
+        env,
+        symbol_short!("LST_CXL"),
+        (invoice_id, seller.clone(), env.ledger().timestamp()),
+    );
 }
 
 pub fn listing_expired(env: &Env, invoice_id: u64, seller: &Address) {
-    emit(env, symbol_short!("LST_EXP"), (invoice_id, seller.clone(), env.ledger().timestamp()));
+    emit(
+        env,
+        symbol_short!("LST_EXP"),
+        (invoice_id, seller.clone(), env.ledger().timestamp()),
+    );
 }
 
 // ── Fee Events ────────────────────────────────────────────────────────────────
@@ -76,18 +84,53 @@ pub fn fee_collected(env: &Env, invoice_id: u64, fee_amount: i128, token: &Addre
     );
 }
 
-// ── Protocol Events ────────────────────────────────────────────────────────
+pub fn fee_withdrawn(env: &Env, token: &Address, amount: i128) {
+    emit(env, symbol_short!("FEE_WTH"), (token.clone(), amount));
+}
+
+/// Emitted when the full token balance is drained via emergency_withdraw.
+pub fn emergency_withdrawn(env: &Env, by: &Address, token: &Address, amount: i128) {
+    emit(
+        env,
+        symbol_short!("EMRG_WTH"),
+        (by.clone(), token.clone(), amount),
+    );
+}
+
+/// Emitted when the protocol fee rate is updated.
+pub fn fee_rate_updated(env: &Env, by: &Address, old_bps: u32, new_bps: u32) {
+    emit(
+        env,
+        symbol_short!("FEE_UPD"),
+        (by.clone(), old_bps, new_bps),
+    );
+}
+
+/// Emitted when the treasury contract is initialized.
+pub fn treasury_initialized(env: &Env, admin: &Address, fee_bps: u32) {
+    emit(
+        env,
+        symbol_short!("TRES_INT"),
+        (admin.clone(), fee_bps),
+    );
+}
+
+// ── Protocol / Admin Events ───────────────────────────────────────────────────
 
 pub fn protocol_paused(env: &Env, by: &Address) {
-    emit(env, symbol_short!("PAUSED"), (by.clone(), env.ledger().timestamp()));
+    emit(
+        env,
+        symbol_short!("PAUSED"),
+        (by.clone(), env.ledger().timestamp()),
+    );
 }
 
 pub fn protocol_unpaused(env: &Env, by: &Address) {
-    emit(env, symbol_short!("UNPAUSED"), (by.clone(), env.ledger().timestamp()));
-}
-
-pub fn fee_withdrawn(env: &Env, token: &Address, amount: i128) {
-    emit(env, symbol_short!("FEE_WTH"), (token.clone(), amount));
+    emit(
+        env,
+        symbol_short!("UNPAUSED"),
+        (by.clone(), env.ledger().timestamp()),
+    );
 }
 
 pub fn token_whitelisted(env: &Env, token: &Address) {

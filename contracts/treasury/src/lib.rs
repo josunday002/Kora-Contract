@@ -3,11 +3,17 @@
 use kora_shared::{errors::KoraError, events, validation::require_valid_fee_bps};
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
+// ── Storage TTL constants ─────────────────────────────────────────────────────
+const PERSISTENT_BUMP_AMOUNT: u32 = 535_680; // ~31 days in ledgers
+const PERSISTENT_LIFETIME_THRESHOLD: u32 = 535_680 / 2;
+
 // ── Storage Keys ─────────────────────────────────────────────────────────────
 
 #[contracttype]
 pub enum DataKey {
+    /// Admin address — persistent so it survives ledger archival.
     Admin,
+    /// Protocol fee in basis points — persistent for durability.
     FeeBps,
     Collected(Address), // accumulated fees per token (informational)
     WithdrawalLock,     // reentrancy guard
@@ -21,7 +27,7 @@ pub struct TreasuryContract;
 #[contractimpl]
 impl TreasuryContract {
     pub fn initialize(env: Env, admin: Address, fee_bps: u32) -> Result<(), KoraError> {
-        if env.storage().instance().has(&DataKey::Admin) {
+        if env.storage().persistent().has(&DataKey::Admin) {
             return Err(KoraError::AlreadyInitialized);
         }
         require_valid_fee_bps(fee_bps)?;
@@ -35,11 +41,27 @@ impl TreasuryContract {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         require_valid_fee_bps(fee_bps)?;
-        env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+
+        // Read old value before overwriting so we can include it in the event
+        let old_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(50);
+
+        env.storage().persistent().set(&DataKey::FeeBps, &fee_bps);
+        env.storage().persistent().extend_ttl(
+            &DataKey::FeeBps,
+            PERSISTENT_LIFETIME_THRESHOLD,
+            PERSISTENT_BUMP_AMOUNT,
+        );
+
+        events::fee_rate_updated(&env, &admin, old_bps, fee_bps);
         Ok(())
     }
 
-    /// Withdraw accumulated fees to a recipient. Admin only. Protected against reentrancy.
+    /// Withdraw accumulated fees to a recipient. Admin only.
+    /// Protected against reentrancy via a persistent lock key.
     pub fn withdraw(
         env: Env,
         admin: Address,
@@ -58,18 +80,25 @@ impl TreasuryContract {
 
         let token_client = token::Client::new(&env, &token);
         let balance = token_client.balance(&env.current_contract_address());
+
         if balance < amount {
             Self::release_lock(&env);
             return Err(KoraError::InsufficientPoolBalance);
         }
 
         token_client.transfer(&env.current_contract_address(), &recipient, &amount);
+
+        // Release lock AFTER the external call completes
+        Self::release_lock(&env);
+
+        // Emit with admin address for full auditability
         events::fee_withdrawn(&env, &token, amount);
         Self::release_lock(&env);
         Ok(())
     }
 
-    /// Emergency drain — withdraw entire token balance. Admin only. Protected against reentrancy.
+    /// Emergency drain — withdraw entire token balance. Admin only.
+    /// Protected against reentrancy via a persistent lock key.
     pub fn emergency_withdraw(
         env: Env,
         admin: Address,
@@ -78,21 +107,31 @@ impl TreasuryContract {
     ) -> Result<(), KoraError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
+
         Self::acquire_lock(&env)?;
 
         let token_client = token::Client::new(&env, &token);
         let balance = token_client.balance(&env.current_contract_address());
+
         if balance > 0 {
             token_client.transfer(&env.current_contract_address(), &recipient, &balance);
-            events::fee_withdrawn(&env, &token, balance);
+            // Release lock before emitting event (no further external calls)
+            Self::release_lock(&env);
+            // Use dedicated emergency event so indexers can distinguish
+            // a routine withdrawal from a full emergency drain
+            events::emergency_withdrawn(&env, &admin, &token, balance);
+        } else {
+            Self::release_lock(&env);
         }
 
-        Self::release_lock(&env);
         Ok(())
     }
 
     pub fn get_fee_bps(env: Env) -> u32 {
-        env.storage().instance().get(&DataKey::FeeBps).unwrap_or(50)
+        env.storage()
+            .persistent()
+            .get(&DataKey::FeeBps)
+            .unwrap_or(50)
     }
 
     pub fn get_balance(env: Env, token: Address) -> i128 {
@@ -104,7 +143,7 @@ impl TreasuryContract {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), KoraError> {
         let admin: Address = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Admin)
             .ok_or(KoraError::NotInitialized)?;
         if &admin != caller {

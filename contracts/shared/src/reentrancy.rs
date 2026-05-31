@@ -38,6 +38,8 @@ pub fn is_locked(env: &Env) -> bool {
     env.storage().instance().has(&GuardKey::Lock)
 }
 
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +111,14 @@ mod tests {
         let _ = protected(&env);
         // Lock must be released even after early return
         assert!(!is_locked(&env));
+    }
+
+    #[test]
+    fn test_release_without_acquire_is_safe() {
+        let env = Env::default();
+        // Releasing when not locked should not panic
+        release_guard(&env);
+        // And acquiring afterwards should succeed
+        assert!(acquire_guard(&env).is_ok());
     }
 }

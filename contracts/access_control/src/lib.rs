@@ -11,8 +11,11 @@ const PERSISTENT_TTL_BUMP: u32 = 518_400;
 
 #[contracttype]
 pub enum DataKey {
+    /// Admin address — persistent so it survives ledger archival.
     Admin,
+    /// Protocol pause flag — persistent so pause state is never silently lost.
     Paused,
+    /// Per-address role mapping.
     Role(Address),
 }
 
@@ -36,7 +39,8 @@ pub struct AccessControlContract;
 impl AccessControlContract {
     /// One-time initialization. Sets the admin and initializes the paused flag.
     pub fn initialize(env: Env, admin: Address) -> Result<(), KoraError> {
-        if env.storage().instance().has(&DataKey::Admin) {
+        // Guard: prevent re-initialization
+        if env.storage().persistent().has(&DataKey::Admin) {
             return Err(KoraError::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -100,6 +104,7 @@ impl AccessControlContract {
     ) -> Result<(), KoraError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
+
         if role == Role::Admin {
             return Err(KoraError::Unauthorized);
         }
@@ -129,6 +134,7 @@ impl AccessControlContract {
             .persistent()
             .get::<_, Role>(&DataKey::Role(target.clone()))
             .unwrap_or(Role::None);
+
         if current_role == Role::Admin {
             return Err(KoraError::Unauthorized);
         }
@@ -156,6 +162,7 @@ impl AccessControlContract {
     ) -> Result<(), KoraError> {
         current_admin.require_auth();
         Self::require_admin(&env, &current_admin)?;
+
         if current_admin == new_admin {
             return Err(KoraError::InvalidAddress);
         }
@@ -215,17 +222,25 @@ impl AccessControlContract {
     /// Returns the current admin address.
     pub fn get_admin(env: Env) -> Result<Address, KoraError> {
         env.storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Admin)
             .ok_or(KoraError::NotInitialized)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// Read the paused flag from persistent storage.
+    fn read_paused(env: &Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), KoraError> {
         let admin: Address = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Admin)
             .ok_or(KoraError::NotInitialized)?;
         if &admin != caller {
@@ -416,6 +431,7 @@ mod tests {
         client.grant_role(&admin, &operator, &Role::Operator);
         assert_eq!(client.get_role(&operator), Role::Operator);
         client.revoke_role(&admin, &operator);
+        // After revoke the entry is removed — should return None
         assert_eq!(client.get_role(&operator), Role::None);
         assert!(!client.has_role(&operator, &Role::Operator));
     }
@@ -1187,5 +1203,12 @@ mod tests {
         client.grant_role(&admin, &user, &Role::Verifier);
         assert!(client.has_role(&user, &Role::Verifier));
         assert!(!client.has_role(&user, &Role::Operator));
+    }
+
+    #[test]
+    fn test_initialize_already_initialized_fails() {
+        let (_, admin, client) = setup();
+        let result = client.try_initialize(&admin);
+        assert!(result.is_err());
     }
 }
