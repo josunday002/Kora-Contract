@@ -1,5 +1,5 @@
-use soroban_sdk::{Bytes, Env, String};
 use crate::errors::KoraError;
+use soroban_sdk::{Bytes, Env, String};
 
 // ── Amount guards ─────────────────────────────────────────────────────────────
 
@@ -65,6 +65,8 @@ pub fn require_non_empty_string(s: &String) -> Result<(), KoraError> {
     Ok(())
 }
 
+/// OPT: Mark for inlining - bytes length check takes reference (no allocation)
+#[inline]
 pub fn require_non_empty_bytes(b: &Bytes) -> Result<(), KoraError> {
     if b.len() == 0 {
         return Err(KoraError::EmptyBytes);
@@ -82,10 +84,11 @@ pub fn require_valid_bps_range(bps: u32, min_bps: u32, max_bps: u32) -> Result<(
     Ok(())
 }
 
-/// Compute `amount * bps / 10_000` with overflow protection.
-/// Rejects negative amounts to prevent silent negative fees.
-pub fn bps_of(amount: i128, bps: u32) -> Result<i128, KoraError> {
-    if amount < 0 {
+/// OPT: Consolidated range check in single comparison (0 <= amount <= max)
+#[inline]
+pub fn require_amount_within_bounds(amount: i128, max: i128) -> Result<(), KoraError> {
+    // OPT: Early exit for negative amounts saves comparison if amount >= 0
+    if amount < 0 || amount > max {
         return Err(KoraError::InvalidAmount);
     }
     amount
@@ -122,7 +125,7 @@ pub fn safe_div(a: i128, b: i128) -> Result<i128, KoraError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::Env;
+    use soroban_sdk::{testutils::Ledger, Env, String as SorobanString};
 
     #[test]
     fn test_require_non_zero_amount() {
@@ -144,6 +147,69 @@ mod tests {
         assert!(require_amount_within_bounds(0, 100).is_ok());
         assert!(require_amount_within_bounds(100, 100).is_ok());
         assert!(require_amount_within_bounds(101, 100).is_err());
+    }
+
+    #[test]
+    fn test_require_future_timestamp() {
+        let env = Env::default();
+        env.ledger().set_timestamp(1_000_000);
+
+        assert!(require_future_timestamp(&env, 1_000_000).is_err()); // equal (not future)
+        assert!(require_future_timestamp(&env, 999_999).is_err()); // past
+        assert!(require_future_timestamp(&env, 1_000_001).is_ok()); // future
+    }
+
+    #[test]
+    fn test_require_valid_risk_score() {
+        assert!(require_valid_risk_score(0).is_ok());
+        assert!(require_valid_risk_score(50).is_ok());
+        assert!(require_valid_risk_score(100).is_ok());
+        assert!(require_valid_risk_score(101).is_err());
+    }
+
+    #[test]
+    fn test_require_non_empty_string() {
+        let env = Env::default();
+        let empty_str = SorobanString::from_str(&env, "");
+        let non_empty_str = SorobanString::from_str(&env, "test");
+
+        assert!(require_non_empty_string(&empty_str).is_err());
+        assert!(require_non_empty_string(&non_empty_str).is_ok());
+    }
+
+    #[test]
+    // AUDIT FIX: Test for new EmptyBytes error variant
+    fn test_require_non_empty_bytes() {
+        let env = Env::default();
+        let empty_bytes = Bytes::from_slice(&env, &[]);
+        let non_empty_bytes = Bytes::from_slice(&env, &[1, 2, 3]);
+
+        let empty_result = require_non_empty_bytes(&empty_bytes);
+        assert!(empty_result.is_err());
+        assert_eq!(
+            empty_result.unwrap_err(),
+            KoraError::EmptyBytes,
+            "Empty bytes should return EmptyBytes error"
+        );
+
+        assert!(require_non_empty_bytes(&non_empty_bytes).is_ok());
+    }
+
+    #[test]
+    fn test_require_valid_fee_bps() {
+        assert!(require_valid_fee_bps(0).is_ok());
+        assert!(require_valid_fee_bps(50).is_ok());
+        assert!(require_valid_fee_bps(10_000).is_ok());
+        assert!(require_valid_fee_bps(10_001).is_err());
+    }
+
+    #[test]
+    fn test_require_amount_within_bounds() {
+        assert!(require_amount_within_bounds(0, 1_000).is_ok());
+        assert!(require_amount_within_bounds(500, 1_000).is_ok());
+        assert!(require_amount_within_bounds(1_000, 1_000).is_ok());
+        assert!(require_amount_within_bounds(1_001, 1_000).is_err());
+        assert!(require_amount_within_bounds(-1, 1_000).is_err());
     }
 
     #[test]
