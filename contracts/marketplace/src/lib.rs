@@ -1,4 +1,5 @@
 #![no_std]
+// Migrated state variables in marketplace contracts
 
 use kora_shared::{
     errors::KoraError,
