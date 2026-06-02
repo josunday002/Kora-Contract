@@ -52,7 +52,10 @@ pub enum DataKey {
     Admin,
     /// Instance key: access control contract address for pause checks
     AccessControl,
+    /// Instance key: Tracks current schema migration version.
+    MigrationVersion,
 }
+
 
 // ── Contract ─────────────────────────────────────────────────────────────────
 
