@@ -143,4 +143,13 @@ mod tests {
             release_guard(&env);
         }
     }
+
+    #[test]
+    fn test_raii_nested_guard_fails() {
+        let env = Env::default();
+        let _guard = ReentrancyGuard::new(&env).unwrap();
+        let result = ReentrancyGuard::new(&env);
+        assert_eq!(result.unwrap_err(), KoraError::Reentrancy);
+        // First guard drops here, lock released
+    }
 }
