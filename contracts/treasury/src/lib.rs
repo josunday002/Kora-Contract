@@ -4,7 +4,7 @@ use kora_shared::{
     errors::KoraError,
     events,
     reentrancy::ReentrancyGuard,
-    validation::{require_non_zero_amount, require_valid_fee_bps},
+    validation::require_valid_fee_bps,
 };
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
 
@@ -96,7 +96,9 @@ impl TreasuryContract {
     /// No auth required — the token transfer itself is the proof of payment.
     /// The amount is validated to be > 0 to prevent no-op accounting entries.
     pub fn collect_fee(env: Env, token: Address, amount: i128) -> Result<(), KoraError> {
-        require_non_zero_amount(amount)?;
+        if amount <= 0 {
+            return Err(KoraError::InvalidAmount);
+        }
         Self::require_whitelisted_token(&env, &token)?;
 
         let key = DataKey::Collected(token.clone());
@@ -113,7 +115,7 @@ impl TreasuryContract {
     }
 
     /// Withdraw accumulated fees to a recipient. Admin only.
-    /// Protected against reentrancy via RAII guard.
+    /// Protected against reentrancy via RAII ReentrancyGuard.
     pub fn withdraw(
         env: Env,
         admin: Address,
@@ -124,9 +126,12 @@ impl TreasuryContract {
         // ── Checks ────────────────────────────────────────────────────────────
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
-        require_non_zero_amount(amount)?;
+        if amount <= 0 {
+            return Err(KoraError::InvalidAmount);
+        }
         Self::require_whitelisted_token(&env, &token)?;
 
+        // Acquire reentrancy guard — released automatically when _guard drops
         let _guard = ReentrancyGuard::new(&env)?;
 
         let token_client = token::Client::new(&env, &token);
@@ -158,7 +163,7 @@ impl TreasuryContract {
     }
 
     /// Emergency drain — withdraw entire token balance. Admin only.
-    /// Protected against reentrancy via RAII guard.
+    /// Protected against reentrancy via RAII ReentrancyGuard.
     pub fn emergency_withdraw(
         env: Env,
         admin: Address,
@@ -385,7 +390,6 @@ mod tests {
         env.mock_all_auths();
         let contract_id = env.register_contract(None, TreasuryContract);
         let client = TreasuryContractClient::new(&env, &contract_id);
-        // Before initialization, falls back to default 50
         assert_eq!(client.get_fee_bps(), 50);
     }
 

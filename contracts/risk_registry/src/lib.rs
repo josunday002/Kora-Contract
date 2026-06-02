@@ -42,7 +42,7 @@ impl RiskRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::InvoiceNft, &invoice_nft);
-        Self::bump_persistent(&env, &DataKey::InvoiceNft);
+        events::registry_initialized(&env, &admin, &invoice_nft);
         Ok(())
     }
 
