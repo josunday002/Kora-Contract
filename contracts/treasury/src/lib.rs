@@ -149,9 +149,7 @@ impl TreasuryContract {
             .get::<_, i128>(&collected_key)
         {
             let new_collected = collected.saturating_sub(amount);
-            env.storage()
-                .persistent()
-                .set(&collected_key, &new_collected);
+            env.storage().persistent().set(&collected_key, &new_collected);
             Self::bump_persistent(&env, &collected_key);
         }
 
@@ -170,7 +168,6 @@ impl TreasuryContract {
         token: Address,
         recipient: Address,
     ) -> Result<(), KoraError> {
-        // ── Checks ────────────────────────────────────────────────────────────
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::require_whitelisted_token(&env, &token)?;
