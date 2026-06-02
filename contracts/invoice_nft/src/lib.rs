@@ -32,7 +32,6 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Str
 // - NextId: Stores the next invoice ID to mint (instance)
 // - Admin: Stores admin address (instance)
 // - AccessControl: Stores access control contract address (instance)
-// - InvoiceCount: Stores total count of invoices minted (instance)
 // - MigrationVersion: Tracks current schema version for upgrade safety (instance)
 
 /// Storage key variants for the invoice NFT contract.
@@ -42,6 +41,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env, Str
 /// - `Admin` — Stores the contract admin address (instance)
 /// - `AccessControl` — Stores the access control contract address (instance)
 /// - `InvoiceCount` — Stores total invoice count for metrics (instance)
+/// - `MigrationVersion` — Tracks current schema version for upgrade safety (instance)
 #[contracttype]
 pub enum DataKey {
     /// Versioned invoice storage: Invoice(id) stores Invoice struct
@@ -52,6 +52,8 @@ pub enum DataKey {
     Admin,
     /// Instance key: access control contract address for pause checks
     AccessControl,
+    /// Instance key: current schema migration version (starts at 1)
+    MigrationVersion,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
