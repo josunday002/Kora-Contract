@@ -48,7 +48,7 @@ pub fn invoice_repaid(env: &Env, invoice_id: u64, sme: &Address, amount: i128) {
     emit(
         env,
         symbol_short!("INV_RPD"),
-        (invoice_id, sme.clone(), amount),
+        (invoice_id, sme.clone(), amount, env.ledger().timestamp()),
     );
 }
 
@@ -66,7 +66,7 @@ pub fn repayment_made(env: &Env, invoice_id: u64, payer: &Address, amount: i128)
     emit(
         env,
         symbol_short!("REPAY"),
-        (invoice_id, payer.clone(), amount),
+        (invoice_id, payer.clone(), amount, env.ledger().timestamp()),
     );
 }
 
@@ -74,7 +74,7 @@ pub fn yield_distributed(env: &Env, invoice_id: u64, investor: &Address, yield_a
     emit(
         env,
         symbol_short!("YIELD"),
-        (invoice_id, investor.clone(), yield_amount),
+        (invoice_id, investor.clone(), yield_amount, env.ledger().timestamp()),
     );
 }
 
@@ -196,7 +196,7 @@ pub fn verifier_added(env: &Env, admin: &Address, verifier: &Address) {
     emit(
         env,
         symbol_short!("VRF_ADD"),
-        (admin.clone(), verifier.clone()),
+        (admin.clone(), verifier.clone(), env.ledger().timestamp()),
     );
 }
 
@@ -206,7 +206,7 @@ pub fn verifier_removed(env: &Env, admin: &Address, verifier: &Address) {
     emit(
         env,
         symbol_short!("VRF_REM"),
-        (admin.clone(), verifier.clone()),
+        (admin.clone(), verifier.clone(), env.ledger().timestamp()),
     );
 }
 
@@ -216,7 +216,7 @@ pub fn sme_registered(env: &Env, verifier: &Address, sme: &Address, risk_score: 
     emit(
         env,
         symbol_short!("SME_REG"),
-        (verifier.clone(), sme.clone(), risk_score),
+        (verifier.clone(), sme.clone(), risk_score, env.ledger().timestamp()),
     );
 }
 
@@ -226,7 +226,7 @@ pub fn sme_score_updated(env: &Env, verifier: &Address, sme: &Address, new_score
     emit(
         env,
         symbol_short!("SME_UPD"),
-        (verifier.clone(), sme.clone(), new_score),
+        (verifier.clone(), sme.clone(), new_score, env.ledger().timestamp()),
     );
 }
 
@@ -236,7 +236,7 @@ pub fn sme_default_recorded(env: &Env, admin: &Address, sme: &Address, total_def
     emit(
         env,
         symbol_short!("SME_DFT"),
-        (admin.clone(), sme.clone(), total_defaults),
+        (admin.clone(), sme.clone(), total_defaults, env.ledger().timestamp()),
     );
 }
 

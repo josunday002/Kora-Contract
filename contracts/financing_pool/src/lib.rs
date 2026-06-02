@@ -346,6 +346,7 @@ impl FinancingPoolContract {
         invoice_id: u64,
         token: &Address,
         total_repaid: i128,
+        _face_value: i128,
     ) -> Result<(), KoraError> {
         let positions: Map<Address, Position> = env
             .storage()
@@ -402,17 +403,16 @@ impl FinancingPoolContract {
             return Err(KoraError::PoolAlreadyClosed);
         }
 
-        // OPT: Cache pool data locally to avoid redundant storage access
-        let repaid_amount = pool.repaid_amount;
-        let face_value = pool.face_value;
-
         // Distribute whatever was repaid so far (partial recovery)
         if pool.repaid_amount > 0 {
-            Self::distribute_yield(&env, invoice_id, &token, pool.repaid_amount)?;
+            Self::distribute_yield(&env, invoice_id, &token, pool.repaid_amount, pool.face_value)?;
         }
 
+        // Close the pool
+        pool.is_closed = true;
+        env.storage().persistent().set(&DataKey::Pool(invoice_id), &pool);
+
         // Mark NFT as defaulted
-        // AUDIT FIX: Use ok_or() instead of unwrap() for safe error propagation
         let nft_contract: Address = env
             .storage()
             .instance()
@@ -538,7 +538,8 @@ mod tests {
         let admin = Address::generate(&env);
         let nft = Address::generate(&env);
         let treasury = Address::generate(&env);
-        let result = client.try_initialize(&admin, &nft, &treasury, &0u32);
+        let access_control = Address::generate(&env);
+        let result = client.try_initialize(&admin, &nft, &treasury, &access_control, &0u32);
         assert!(result.is_ok());
     }
 
@@ -567,16 +568,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-        let result = client.try_record_position(
-            &non_admin,
-            &1u64,
-            &investor,
-            &1_000_000_000i128,
-            &10_000_000_000i128,
-        );
-        assert!(result.is_err());
-    }
-
     #[test]
     fn test_record_position_arithmetic_overflow() {
         let (env, admin, nft, treasury, access_control, client) = setup();
@@ -600,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_record_position_share_bps_correct() {
-        let (env, admin, _nft, _treasury, client) = setup();
+        let (env, admin, _nft, _treasury, _access_control, client) = setup();
         let investor = Address::generate(&env);
         client.record_position(
             &admin, &1u64, &investor, &5_000_000_000i128, &10_000_000_000i128,
@@ -630,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_repay_negative_amount_fails() {
-        let (env, _admin, _nft, _treasury, client) = setup();
+        let (env, _admin, _nft, _treasury, _access_control, client) = setup();
         let payer = Address::generate(&env);
         let token = Address::generate(&env);
         let result = client.try_repay(&payer, &1u64, &token, &-1i128);

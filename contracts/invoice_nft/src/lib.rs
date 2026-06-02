@@ -14,6 +14,7 @@
 use kora_shared::{
     errors::KoraError,
     events,
+    reentrancy::ReentrancyGuard,
     types::{Invoice, InvoiceStatus, RiskTier},
     validation::{
         require_future_timestamp, require_non_empty_bytes, require_non_empty_string,
@@ -52,6 +53,8 @@ pub enum DataKey {
     Admin,
     /// Instance key: access control contract address for pause checks
     AccessControl,
+    /// Instance key: tracks schema version for migration safety
+    MigrationVersion,
 }
 
 // ── Contract ─────────────────────────────────────────────────────────────────
@@ -119,6 +122,7 @@ impl InvoiceNftContract {
     ) -> Result<u64, KoraError> {
         sme.require_auth();
         Self::require_not_paused(&env)?;
+        let _guard = ReentrancyGuard::new(&env)?;
 
         require_non_zero_amount(amount)?;
         require_future_timestamp(&env, due_date)?;
@@ -160,6 +164,7 @@ impl InvoiceNftContract {
     pub fn set_listed(env: Env, caller: Address, invoice_id: u64) -> Result<(), KoraError> {
         caller.require_auth();
         Self::require_not_paused(&env)?;
+        let _guard = ReentrancyGuard::new(&env)?;
         let mut invoice = Self::load_invoice(&env, invoice_id)?;
         if invoice.status != InvoiceStatus::Created {
             return Err(KoraError::InvalidInvoiceStatus);
@@ -176,6 +181,7 @@ impl InvoiceNftContract {
     pub fn set_funded(env: Env, caller: Address, invoice_id: u64) -> Result<(), KoraError> {
         caller.require_auth();
         Self::require_not_paused(&env)?;
+        let _guard = ReentrancyGuard::new(&env)?;
         let mut invoice = Self::load_invoice(&env, invoice_id)?;
         if invoice.status != InvoiceStatus::Listed {
             return Err(KoraError::InvalidInvoiceStatus);
@@ -192,6 +198,7 @@ impl InvoiceNftContract {
     /// Mark invoice as Repaid. Called by Financing Pool on full repayment.
     pub fn set_repaid(env: Env, caller: Address, invoice_id: u64) -> Result<(), KoraError> {
         caller.require_auth();
+        let _guard = ReentrancyGuard::new(&env)?;
         let mut invoice = Self::load_invoice(&env, invoice_id)?;
         if invoice.status != InvoiceStatus::Funded {
             return Err(KoraError::InvalidInvoiceStatus);
@@ -209,6 +216,7 @@ impl InvoiceNftContract {
     pub fn set_defaulted(env: Env, caller: Address, invoice_id: u64) -> Result<(), KoraError> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
+        let _guard = ReentrancyGuard::new(&env)?;
         let mut invoice = Self::load_invoice(&env, invoice_id)?;
         if invoice.status != InvoiceStatus::Funded {
             return Err(KoraError::InvalidInvoiceStatus);

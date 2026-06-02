@@ -11,35 +11,6 @@ pub enum GuardKey {
     Lock,
 }
 
-// ── RAII guard ────────────────────────────────────────────────────────────────
-
-/// RAII reentrancy guard. Acquires the lock on construction and releases it
-/// when dropped, ensuring the lock is always released even on early returns.
-///
-/// # Usage
-/// ```rust,ignore
-/// let _guard = ReentrancyGuard::new(&env)?;
-/// // ... protected logic ...
-/// // lock is released automatically when _guard goes out of scope
-/// ```
-pub struct ReentrancyGuard<'a> {
-    env: &'a Env,
-}
-
-impl<'a> ReentrancyGuard<'a> {
-    /// Acquire the reentrancy lock. Returns `KoraError::Reentrancy` if already held.
-    pub fn new(env: &'a Env) -> Result<Self, KoraError> {
-        acquire_guard(env)?;
-        Ok(Self { env })
-    }
-}
-
-impl<'a> Drop for ReentrancyGuard<'a> {
-    fn drop(&mut self) {
-        release_guard(self.env);
-    }
-}
-
 // ── Low-level helpers ─────────────────────────────────────────────────────────
 
 /// Acquire the reentrancy lock.
@@ -153,7 +124,6 @@ mod tests {
     #[test]
     fn test_release_without_acquire_is_safe() {
         let env = Env::default();
-        // Releasing when not locked should not panic
         release_guard(&env);
         assert!(acquire_guard(&env).is_ok());
         release_guard(&env);
@@ -165,12 +135,10 @@ mod tests {
 
         fn protected(env: &Env) -> Result<(), KoraError> {
             let _guard = ReentrancyGuard::new(env)?;
-            // Simulate early return via ?
             Err(KoraError::InvalidAmount)
         }
 
         let _ = protected(&env);
-        // Lock must be released even after early return
         assert!(!is_locked(&env));
     }
 
@@ -197,15 +165,6 @@ mod tests {
     }
 
     #[test]
-    fn test_guard_release_allows_reacquisition() {
-        let env = Env::default();
-        assert!(acquire_guard(&env).is_ok());
-        release_guard(&env);
-        assert!(acquire_guard(&env).is_ok());
-        release_guard(&env);
-    }
-
-    #[test]
     fn test_multiple_guard_cycles() {
         let env = Env::default();
         for _ in 0..5 {
@@ -218,9 +177,7 @@ mod tests {
     fn test_raii_nested_guard_fails() {
         let env = Env::default();
         let _guard = ReentrancyGuard::new(&env).unwrap();
-        // Second guard must fail while first is held
         let result = ReentrancyGuard::new(&env);
         assert_eq!(result.unwrap_err(), KoraError::Reentrancy);
-        // First guard drops here, lock released
     }
 }
