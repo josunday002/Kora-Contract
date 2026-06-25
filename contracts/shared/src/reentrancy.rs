@@ -28,6 +28,27 @@ pub fn is_locked(env: &Env) -> bool {
     env.storage().instance().has(&GuardKey::Lock)
 }
 
+// ── RAII Guard ───────────────────────────────────────────────────────────────
+
+/// RAII reentrancy guard. Acquires the lock on construction and releases it
+/// when dropped, guaranteeing exactly one release per successful acquire.
+pub struct ReentrancyGuard {
+    env: Env,
+}
+
+impl ReentrancyGuard {
+    pub fn new(env: &Env) -> Result<Self, KoraError> {
+        acquire_guard(env)?;
+        Ok(Self { env: env.clone() })
+    }
+}
+
+impl Drop for ReentrancyGuard {
+    fn drop(&mut self) {
+        release_guard(&self.env);
+    }
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 
