@@ -7,7 +7,7 @@ use kora_shared::{
     events,
     reentrancy::ReentrancyGuard,
     types::Listing,
-    validation::{bps_of, require_non_zero_amount, require_valid_fee_bps, safe_add, safe_sub, UPGRADE_TIMELOCK_DELAY},
+    validation::{bps_of_normalized, require_non_zero_amount, require_valid_fee_bps, safe_add, safe_sub, UPGRADE_TIMELOCK_DELAY},
 };
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env};
 
@@ -226,12 +226,13 @@ impl MarketplaceContract {
 
         let config = Self::load_config(&env)?;
 
-        let fee = bps_of(amount, config.fee_bps)?;
+        let token_client = token::Client::new(&env, &listing.token);
+        let token_decimals = token_client.decimals();
+
+        let fee = bps_of_normalized(amount, config.fee_bps, token_decimals)?;
         let net = amount
             .checked_sub(fee)
             .ok_or(KoraError::ArithmeticOverflow)?;
-
-        let token_client = token::Client::new(&env, &listing.token);
 
         // Transfer fee to treasury (if non-zero)
         if fee > 0 {

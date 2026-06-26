@@ -4,7 +4,7 @@ use kora_shared::{
     errors::KoraError,
     events,
     types::{Pool, Position},
-    validation::{bps_of, UPGRADE_TIMELOCK_DELAY},
+    validation::{bps_of_normalized, UPGRADE_TIMELOCK_DELAY},
 };
 use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env, Map, Vec};
 
@@ -262,9 +262,10 @@ impl FinancingPoolContract {
             .unwrap_or_else(|| Map::new(env));
 
         let token_client = token::Client::new(env, token);
+        let token_decimals = token_client.decimals();
 
         for (investor, position) in positions.iter() {
-            let payout = bps_of(total_repaid, position.share_bps)?;
+            let payout = bps_of_normalized(total_repaid, position.share_bps, token_decimals)?;
             let yield_amount = payout
                 .checked_sub(position.contributed)
                 .ok_or(KoraError::ArithmeticOverflow)?;
