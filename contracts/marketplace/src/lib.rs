@@ -7,9 +7,9 @@ use kora_shared::{
     events,
     reentrancy::ReentrancyGuard,
     types::Listing,
-    validation::{bps_of, require_non_zero_amount, require_valid_fee_bps, safe_add, safe_sub},
+    validation::{bps_of, require_non_zero_amount, require_valid_fee_bps, safe_add, safe_sub, UPGRADE_TIMELOCK_DELAY},
 };
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, BytesN, Env};
 
 // ~30 days in ledgers at ~5s/ledger
 const PERSISTENT_TTL_THRESHOLD: u32 = 518_400;
@@ -27,6 +27,7 @@ pub enum DataKey {
     FeeBps,
     Listing(u64),
     WhitelistedToken(Address),
+    UpgradeProposal,
 }
 
 // ── Config struct ─────────────────────────────────────────────────────────────
@@ -314,6 +315,45 @@ impl MarketplaceContract {
             .persistent()
             .get(&DataKey::WhitelistedToken(token))
             .unwrap_or(false)
+    }
+
+    // ── Upgrade ────────────────────────────────────────────────────────────────
+
+    pub fn propose_upgrade(
+        env: Env,
+        admin: Address,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<(), KoraError> {
+        admin.require_auth();
+        let config = Self::load_config(&env)?;
+        if config.admin != admin {
+            return Err(KoraError::NotAdmin);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::UpgradeProposal, &(new_wasm_hash.clone(), env.ledger().timestamp()));
+        events::upgrade_proposed(&env, &admin, &new_wasm_hash);
+        Ok(())
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), KoraError> {
+        admin.require_auth();
+        let config = Self::load_config(&env)?;
+        if config.admin != admin {
+            return Err(KoraError::NotAdmin);
+        }
+        let (wasm_hash, proposed_at): (BytesN<32>, u64) = env
+            .storage()
+            .instance()
+            .get(&DataKey::UpgradeProposal)
+            .ok_or(KoraError::NoUpgradeProposed)?;
+        if env.ledger().timestamp() < proposed_at + UPGRADE_TIMELOCK_DELAY {
+            return Err(KoraError::UpgradeTimelockNotElapsed);
+        }
+        env.storage().instance().remove(&DataKey::UpgradeProposal);
+        events::upgrade_executed(&env, &admin, &wasm_hash);
+        env.deployer().update_current_contract_wasm(wasm_hash);
+        Ok(())
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

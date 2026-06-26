@@ -315,4 +315,22 @@ pub fn registry_initialized(env: &Env, admin: &Address, invoice_nft: &Address) {
     );
 }
 
+// ── Upgrade Events ───────────────────────────────────────────────────────────
+
+pub fn upgrade_proposed(env: &Env, admin: &Address, wasm_hash: &soroban_sdk::BytesN<32>) {
+    emit(
+        env,
+        symbol_short!("UPG_PROP"),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
+}
+
+pub fn upgrade_executed(env: &Env, admin: &Address, wasm_hash: &soroban_sdk::BytesN<32>) {
+    emit(
+        env,
+        symbol_short!("UPG_EXEC"),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
+}
+
 // AUDIT FIX: Removed duplicate sme_invoice_counted — use sme_invoice_count_incremented instead.
